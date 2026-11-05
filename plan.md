@@ -51,3 +51,7 @@ Usar servidor estático local na porta 3000. Configurar diagnóstico JavaScript/
 ## Estoque e peças
 
 O módulo de estoque deverá controlar cadastro de itens, código interno, categoria, fornecedor, localização, custo, preço de venda, saldo atual, mínimo e máximo. Cada item terá uma unidade configurável, incluindo `un.`, `pc`, `jogo`, `par`, `kit`, `cx`, `m`, `cm`, `mm`, `ml`, `l`, `g`, `kg` e `rolo`, com possibilidade de acrescentar outras unidades. O fluxo também contempla entradas, saídas vinculadas a ordens de serviço, ajustes de inventário físico, histórico de movimentações, alertas de reposição, valorização do estoque e relatórios exportáveis localmente.
+
+## Clientes, veículos e vendas
+
+O cadastro de clientes terá identificação, CPF/CNPJ, nascimento, telefone, e-mail e endereço. Cada cliente terá uma coleção de veículos vinculados com placa, marca, modelo, ano, cor, chassi/VIN e quilometragem. O módulo comercial será separado, mas integrado ao mesmo monólito: seleciona cliente e veículo, pesquisa serviços e produtos do catálogo, monta o carrinho da venda, calcula o total e gera a OS vinculada ao cliente, veículo e itens vendidos.

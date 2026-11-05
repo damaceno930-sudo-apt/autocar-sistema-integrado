@@ -31,10 +31,14 @@ const state = {
   status: 'all',
   inventoryCategory: 'all',
   inventoryStatus: 'all',
+  saleClientId: 1,
+  saleVehicleId: 101,
+  saleSearch: '',
+  saleCart: [],
   users: [
     { id: 1, name: 'Rafael Costa', login: 'admin@autocar.local', password: 'admin123', role: 'Administrador', admin: true, permissions: ['all'] },
     { id: 2, name: 'João Mendes', login: 'joao.mendes', password: 'oficina123', role: 'Técnico', admin: false, permissions: ['dashboard', 'orders', 'customers', 'diagnostics'] },
-    { id: 3, name: 'Camila Prado', login: 'camila.prado', password: 'oficina123', role: 'Recepção', admin: false, permissions: ['dashboard', 'orders', 'customers', 'schedule'] }
+    { id: 3, name: 'Camila Prado', login: 'camila.prado', password: 'oficina123', role: 'Recepção', admin: false, permissions: ['dashboard', 'orders', 'customers', 'sales', 'schedule'] }
   ],
   orders: [
     { id: 'OS-0248', customer: 'Marcos Almeida', plate: 'RZD-4H81', vehicle: 'Toyota Corolla 2020', service: 'Revisão preventiva', technician: 'João Mendes', status: 'progress', statusLabel: 'Em serviço', delivery: 'Hoje, 16:30', total: 1280.5 },
@@ -44,10 +48,10 @@ const state = {
     { id: 'OS-0244', customer: 'Eduardo Lima', plate: 'MNO-1A09', vehicle: 'Chevrolet Onix 2023', service: 'Alinhamento e balanceamento', technician: 'Lucas Ferreira', status: 'progress', statusLabel: 'Em serviço', delivery: 'Amanhã, 10:00', total: 260.0 }
   ],
   clients: [
-    { name: 'Marcos Almeida', phone: '(11) 99842-1200', vehicle: 'Toyota Corolla 2020', plate: 'RZD-4H81', visits: 8, last: 'Hoje' },
-    { name: 'Camila Rocha', phone: '(11) 99102-3771', vehicle: 'Honda HR-V 2022', plate: 'GKA-9B62', visits: 4, last: 'Hoje' },
-    { name: 'André Carvalho', phone: '(11) 99810-4453', vehicle: 'Jeep Renegade 2019', plate: 'QWE-3D17', visits: 11, last: 'Ontem' },
-    { name: 'Patrícia Nunes', phone: '(11) 98831-2220', vehicle: 'Volkswagen T-Cross 2021', plate: 'FTR-8C44', visits: 3, last: 'Ontem' }
+    { id: 1, name: 'Marcos Almeida', cpf: '248.913.760-12', email: 'marcos.almeida@email.com', phone: '(11) 99842-1200', birth: '18/04/1987', address: 'Rua das Flores, 120 • São Paulo/SP', vehicles: [{ id: 101, plate: 'RZD-4H81', brand: 'Toyota', model: 'Corolla XEi', year: '2020', color: 'Prata', vin: '9BRBD3HE5L4012345', mileage: 68420 }], visits: 8, last: 'Hoje' },
+    { id: 2, name: 'Camila Rocha', cpf: '327.541.880-05', email: 'camila.rocha@email.com', phone: '(11) 99102-3771', birth: '02/09/1991', address: 'Av. Central, 845 • Santo André/SP', vehicles: [{ id: 102, plate: 'GKA-9B62', brand: 'Honda', model: 'HR-V EXL', year: '2022', color: 'Cinza', vin: '93HRV3F58NY501234', mileage: 39210 }], visits: 4, last: 'Hoje' },
+    { id: 3, name: 'André Carvalho', cpf: '119.708.440-66', email: 'andre.carvalho@email.com', phone: '(11) 99810-4453', birth: '26/11/1979', address: 'Rua do Comércio, 60 • São Paulo/SP', vehicles: [{ id: 103, plate: 'QWE-3D17', brand: 'Jeep', model: 'Renegade Longitude', year: '2019', color: 'Preto', vin: '98861115XKT601234', mileage: 92100 }], visits: 11, last: 'Ontem' },
+    { id: 4, name: 'Patrícia Nunes', cpf: '451.632.990-40', email: 'patricia.nunes@email.com', phone: '(11) 98831-2220', birth: '11/06/1994', address: 'Rua do Sol, 48 • São Bernardo/SP', vehicles: [{ id: 104, plate: 'FTR-8C44', brand: 'Volkswagen', model: 'T-Cross Comfortline', year: '2021', color: 'Branco', vin: '9BWBH6BF7M401234', mileage: 55800 }], visits: 3, last: 'Ontem' }
   ],
   inventory: [
     { name: 'Óleo 5W30 sintético', code: 'LUB-5W30-1L', category: 'Lubrificantes', stock: 4, min: 10, max: 40, unit: 'un.', price: 42.9, cost: 28.5, location: 'Prateleira A1', supplier: 'LubriMax' },
@@ -61,11 +65,18 @@ const state = {
 };
 
 const titles = {
-  dashboard: ['Visão geral', 'Dashboard'], orders: ['Operação', 'Ordens de serviço'], customers: ['Operação', 'Clientes e veículos'], inventory: ['Operação', 'Estoque e peças'], services: ['Operação', 'Serviços e preços'], schedule: ['Operação', 'Agendamentos'], diagnostics: ['Gestão', 'Diagnóstico'], finance: ['Gestão', 'Financeiro'], reports: ['Gestão', 'Relatórios'], settings: ['Sistema', 'Configurações'], backup: ['Sistema', 'Backup local']
+  dashboard: ['Visão geral', 'Dashboard'], orders: ['Operação', 'Ordens de serviço'], customers: ['Operação', 'Clientes e veículos'], sales: ['Operação', 'Vendas e nova OS'], inventory: ['Operação', 'Estoque e peças'], services: ['Operação', 'Serviços e preços'], schedule: ['Operação', 'Agendamentos'], diagnostics: ['Gestão', 'Diagnóstico'], finance: ['Gestão', 'Financeiro'], reports: ['Gestão', 'Relatórios'], settings: ['Sistema', 'Configurações'], backup: ['Sistema', 'Backup local']
 };
 
 const moduleCatalog = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' }, { id: 'orders', label: 'Ordens de serviço', icon: 'clipboard' }, { id: 'customers', label: 'Clientes e veículos', icon: 'users' }, { id: 'inventory', label: 'Estoque e peças', icon: 'box' }, { id: 'services', label: 'Serviços e preços', icon: 'wrench' }, { id: 'schedule', label: 'Agendamentos', icon: 'calendar' }, { id: 'diagnostics', label: 'Diagnóstico', icon: 'scan' }, { id: 'finance', label: 'Financeiro', icon: 'wallet' }, { id: 'reports', label: 'Relatórios', icon: 'chart' }, { id: 'settings', label: 'Configurações', icon: 'settings' }, { id: 'backup', label: 'Backup local', icon: 'database' }
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' }, { id: 'orders', label: 'Ordens de serviço', icon: 'clipboard' }, { id: 'customers', label: 'Clientes e veículos', icon: 'users' }, { id: 'sales', label: 'Vendas e nova OS', icon: 'receipt' }, { id: 'inventory', label: 'Estoque e peças', icon: 'box' }, { id: 'services', label: 'Serviços e preços', icon: 'wrench' }, { id: 'schedule', label: 'Agendamentos', icon: 'calendar' }, { id: 'diagnostics', label: 'Diagnóstico', icon: 'scan' }, { id: 'finance', label: 'Financeiro', icon: 'wallet' }, { id: 'reports', label: 'Relatórios', icon: 'chart' }, { id: 'settings', label: 'Configurações', icon: 'settings' }, { id: 'backup', label: 'Backup local', icon: 'database' }
+];
+
+const serviceCatalog = [
+  { id: 'svc-1', kind: 'service', name: 'Revisão preventiva', code: 'SRV-001', category: 'Serviço', price: 480 },
+  { id: 'svc-2', kind: 'service', name: 'Troca de óleo e filtros', code: 'SRV-002', category: 'Serviço', price: 249 },
+  { id: 'svc-3', kind: 'service', name: 'Freios e suspensão', code: 'SRV-003', category: 'Serviço', price: 320 },
+  { id: 'svc-4', kind: 'service', name: 'Diagnóstico eletrônico', code: 'SRV-004', category: 'Serviço', price: 180 }
 ];
 
 function icon(name, className = '') {
@@ -134,8 +145,21 @@ function renderOrders() {
 function orderRowExtended(order) { return `<tr><td><div class="cell-primary"><span class="vehicle-symbol">${icon('receipt')}</span><div>${esc(order.id)}<span class="cell-secondary">${esc(order.customer)}</span></div></div></td><td>${esc(order.plate)}<span class="cell-secondary">${esc(order.vehicle)}</span></td><td>${esc(order.service)}</td><td>${esc(order.technician)}</td><td>${statusPill(order.status, order.statusLabel)}</td><td>${esc(order.delivery)}</td><td><strong style="color:var(--slate-300)">${money(order.total)}</strong></td><td><button class="action-dots" data-order-id="${esc(order.id)}" title="Concluir ordem">•••</button></td></tr>`; }
 
 function renderCustomers() {
-  const visible = state.clients.filter(matches);
-  return `${pageHeader('Operação', 'Clientes e veículos', 'Histórico completo de relacionamento e manutenção.', '<button class="button button-primary" data-action="new-client">'+icon('plus')+' Novo cliente</button>')}<section class="split-layout"><div class="panel table-panel" style="margin-top:0">${panelHeader('Clientes recentes', 'Base local de clientes e veículos associados.')}<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Veículo</th><th>Visitas</th><th>Última visita</th><th></th></tr></thead><tbody>${visible.map((client) => `<tr><td><div class="cell-primary"><span class="user-avatar">${client.name.split(' ').map((x) => x[0]).slice(0,2).join('')}</span><div>${esc(client.name)}<span class="cell-secondary">${esc(client.phone)}</span></div></div></td><td>${esc(client.plate)}<span class="cell-secondary">${esc(client.vehicle)}</span></td><td>${client.visits} atendimentos</td><td>${esc(client.last)}</td><td><button class="action-dots" data-action="show-toast">•••</button></td></tr>`).join('')}</tbody></table></div></div><div class="card-list"><article class="panel">${panelHeader('Resumo da base')}<div class="metric-inline"><b>186</b><span>clientes cadastrados</span></div><div class="metric-inline"><b>241</b><span>veículos vinculados</span></div><div class="metric-inline"><b>74%</b><span>retorno no último ano</span></div></article><article class="panel">${panelHeader('Ações rápidas')}<button class="quick-action" data-action="show-toast">${icon('car')} Consultar por placa <span>→</span></button><button class="quick-action" data-action="show-toast">${icon('receipt')} Ver histórico completo <span>→</span></button></article></div></section>`;
+  const visible = state.clients.filter((client) => JSON.stringify(client).toLowerCase().includes(state.search.trim().toLowerCase()));
+  const selected = state.clients.find((client) => client.id === state.saleClientId) || state.clients[0];
+  const vehicle = selected?.vehicles[0];
+  return `${pageHeader('Operação', 'Clientes e veículos', 'Cadastro completo, histórico e veículos vinculados em um único relacionamento.', '<button class="button button-primary" data-action="new-client">'+icon('plus')+' Novo cliente</button>')}<section class="split-layout"><div class="panel table-panel" style="margin-top:0">${panelHeader('Base de clientes', `${state.clients.length} clientes cadastrados e ${state.clients.reduce((sum, client) => sum + client.vehicles.length, 0)} veículos vinculados.`, '<button class="text-link" data-view="sales">Abrir vendas →</button>')}<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Contato</th><th>Veículos</th><th>Último atendimento</th><th></th></tr></thead><tbody>${visible.map((client) => `<tr class="is-clickable" data-select-client="${client.id}"><td><div class="cell-primary"><span class="user-avatar">${initials(client.name)}</span><div>${esc(client.name)}<span class="cell-secondary">CPF ${esc(client.cpf)}</span></div></div></td><td>${esc(client.phone)}<span class="cell-secondary">${esc(client.email)}</span></td><td><strong style="color:var(--slate-300)">${client.vehicles.length}</strong><span class="cell-secondary">${client.vehicles.map((car) => esc(car.plate)).join(' • ')}</span></td><td>${esc(client.last)}</td><td><button class="action-dots" data-select-client="${client.id}">•••</button></td></tr>`).join('')}</tbody></table></div></div><div class="card-list"><article class="panel">${panelHeader('Ficha do cliente', 'Dados cadastrais e contato principal.')}<div class="profile-summary"><span class="user-avatar large">${initials(selected.name)}</span><div><h3>${esc(selected.name)}</h3><p>${esc(selected.email)}</p><p>${esc(selected.phone)} • ${esc(selected.address)}</p></div></div><div class="detail-grid"><div><span>CPF</span><b>${esc(selected.cpf)}</b></div><div><span>Nascimento</span><b>${esc(selected.birth)}</b></div></div></article><article class="panel">${panelHeader('Veículo vinculado', 'Acessível diretamente na abertura da OS.', '<button class="text-link" data-action="new-vehicle">Adicionar veículo →</button>')}<div class="vehicle-card"><span class="vehicle-symbol">${icon('car')}</span><div><strong>${esc(vehicle?.brand || '')} ${esc(vehicle?.model || '')}</strong><span>${esc(vehicle?.plate || '')} • ${esc(vehicle?.year || '')} • ${esc(vehicle?.color || '')}</span><small>Chassi ${esc(vehicle?.vin || 'Não informado')} • ${vehicle?.mileage || 0} km</small></div></div><button class="button button-primary full-action" data-view="sales">Vender serviço para este cliente ${icon('arrow')}</button></article></div></section>`;
+}
+
+function renderSales() {
+  const client = state.clients.find((item) => item.id === Number(state.saleClientId)) || state.clients[0];
+  if (!client) return `${pageHeader('Operação', 'Vendas e nova OS', 'Cadastre um cliente antes de iniciar uma venda.')}<div class="empty-state"><h3>Nenhum cliente cadastrado</h3></div>`;
+  const vehicle = client.vehicles.find((item) => item.id === Number(state.saleVehicleId)) || client.vehicles[0];
+  state.saleVehicleId = vehicle.id;
+  const catalog = [...serviceCatalog, ...state.inventory.map((item) => ({ id: `prod-${item.code}`, kind: 'product', name: item.name, code: item.code, category: 'Produto', price: item.price, unit: item.unit }))];
+  const results = catalog.filter((item) => JSON.stringify(item).toLowerCase().includes(state.saleSearch.trim().toLowerCase()));
+  const total = state.saleCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  return `${pageHeader('Operação', 'Vendas e nova OS', 'Localize serviços e produtos, monte o atendimento e gere a ordem para o cliente.', '<button class="button button-ghost" data-action="new-client">'+icon('plus')+' Novo cliente</button>')}<section class="sale-context panel"><div><span class="eyebrow">Cliente do atendimento</span><div class="context-selects"><select class="select-control" id="sale-client">${state.clients.map((item) => `<option value="${item.id}" ${item.id === client.id ? 'selected' : ''}>${esc(item.name)} • ${esc(item.phone)}</option>`).join('')}</select><select class="select-control" id="sale-vehicle">${client.vehicles.map((item) => `<option value="${item.id}" ${item.id === vehicle.id ? 'selected' : ''}>${esc(item.plate)} • ${esc(item.brand)} ${esc(item.model)}</option>`).join('')}</select></div><p class="context-detail">CPF ${esc(client.cpf)} • ${esc(client.email)} • ${esc(client.address)}</p></div><button class="text-link" data-view="customers">Ver cadastro completo →</button></section><section class="sale-grid"><article class="panel catalog-panel">${panelHeader('Catálogo de serviços e produtos', 'Pesquise por descrição, código ou categoria.')}<label class="search-box sale-search"><span class="search-icon" data-icon="search"></span><input id="sale-search" type="search" value="${esc(state.saleSearch)}" placeholder="Buscar serviço, peça ou código..." autocomplete="off" /></label><div class="catalog-list">${results.map((item) => `<div class="catalog-item"><div class="catalog-item-icon ${item.kind === 'product' ? 'cyan' : 'orange'}">${icon(item.kind === 'product' ? 'box' : 'wrench')}</div><div class="catalog-item-copy"><strong>${esc(item.name)}</strong><span>${esc(item.code)} • ${esc(item.category)}${item.unit ? ` • ${esc(item.unit)}` : ''}</span></div><b>${money(item.price)}</b><button class="button button-ghost compact-button" data-add-sale="${esc(item.id)}">Adicionar</button></div>`).join('') || '<div class="empty-state"><h3>Nenhum resultado</h3><p>Altere os termos da busca para localizar um item.</p></div>'}</div></article><article class="panel sale-cart-panel">${panelHeader('Itens da venda', `${state.saleCart.length} itens adicionados.`)}<div class="sale-cart">${state.saleCart.length ? state.saleCart.map((item) => `<div class="cart-item"><div><strong>${esc(item.name)}</strong><span>${esc(item.code)} • ${item.quantity} ${esc(item.unit || 'serviço')}</span></div><b>${money(item.price * item.quantity)}</b><button class="action-dots" data-remove-sale="${esc(item.id)}">×</button></div>`).join('') : '<div class="cart-empty">Adicione serviços ou produtos do catálogo para montar a OS.</div>'}</div><div class="cart-total"><span>Total da OS</span><strong>${money(total)}</strong></div><button class="button button-primary full-action" data-action="generate-os" ${state.saleCart.length ? '' : 'disabled'}>${icon('clipboard')} Gerar ordem de serviço</button></article></section>`;
 }
 
 function renderInventory() {
@@ -156,8 +180,6 @@ function renderDiagnostics() { return `${pageHeader('Gestão', 'Diagnóstico', '
 function renderFinance() { return `${pageHeader('Gestão', 'Financeiro', 'Visão clara do caixa, recebimentos e compromissos.', '<button class="button button-primary" data-action="show-toast">'+icon('plus')+' Novo lançamento</button>')}<section class="kpi-grid"><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon green">${icon('wallet')}</span><span class="kpi-change">+8,6%</span></div><strong class="kpi-value">R$ 18.420</strong><span class="kpi-label">Recebido no mês</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon amber">${icon('receipt')}</span><span class="kpi-change down">06 contas</span></div><strong class="kpi-value">R$ 4.280</strong><span class="kpi-label">A receber</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon red">${icon('alert')}</span><span class="kpi-change down">atenção</span></div><strong class="kpi-value">R$ 1.160</strong><span class="kpi-label">Em atraso</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon cyan">${icon('trend')}</span><span class="kpi-change">meta 82%</span></div><strong class="kpi-value">76%</strong><span class="kpi-label">Margem operacional</span></article></section><section class="dashboard-grid"><article class="panel">${panelHeader('Movimentação do mês', 'Entradas confirmadas por semana.')}<div class="progress-list"><div class="progress-line"><span>Semana 01</span><div class="progress-track"><div class="progress-fill cyan" style="width:64%"></div></div><b>R$ 4,2k</b></div><div class="progress-line"><span>Semana 02</span><div class="progress-track"><div class="progress-fill cyan" style="width:82%"></div></div><b>R$ 5,3k</b></div><div class="progress-line"><span>Semana 03</span><div class="progress-track"><div class="progress-fill" style="width:74%"></div></div><b>R$ 4,8k</b></div><div class="progress-line"><span>Semana 04</span><div class="progress-track"><div class="progress-fill green" style="width:63%"></div></div><b>R$ 4,1k</b></div></div></article><article class="panel">${panelHeader('Próximos recebimentos')}<div class="alert-list"><div class="alert-item"><div class="alert-icon" style="background:var(--green-soft);color:var(--green)">${icon('check')}</div><div class="alert-copy"><strong>OS-0246 • André Carvalho</strong><span>Pix • hoje</span></div><b style="color:var(--green)">${money(540)}</b></div><div class="alert-item warning"><div class="alert-icon">${icon('receipt')}</div><div class="alert-copy"><strong>OS-0247 • Camila Rocha</strong><span>Cartão • hoje</span></div><b>${money(845)}</b></div></div></article></section>`; }
 
 function renderReports() { return `${pageHeader('Gestão', 'Relatórios', 'Indicadores operacionais para decisões mais rápidas.')}<section class="module-grid"><article class="module-card"><span class="module-icon orange">${icon('chart')}</span><h3>Desempenho financeiro</h3><p>Receita, margem, ticket médio e evolução mensal.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article><article class="module-card"><span class="module-icon cyan">${icon('clipboard')}</span><h3>Produtividade da oficina</h3><p>Tempo por OS, técnico, baia e tipo de serviço.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article><article class="module-card"><span class="module-icon amber">${icon('box')}</span><h3>Movimentação de estoque</h3><p>Consumo, perdas, compras e itens abaixo do mínimo.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article></section><div class="empty-state" style="margin-top:18px"><div><div class="empty-state-icon" style="margin-left:auto;margin-right:auto">${icon('chart')}</div><h3>Relatórios detalhados entram na próxima etapa</h3><p>O protótipo já reservou os espaços para gráficos e exportação local em PDF/CSV.</p></div></div>`; }
-function renderReports() { return `${pageHeader('Gestão', 'Relatórios', 'Indicadores operacionais para decisões mais rápidas.')}<section class="module-grid"><article class="module-card"><span class="module-icon orange">${icon('chart')}</span><h3>Desempenho financeiro</h3><p>Receita, margem, ticket médio e evolução mensal.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article><article class="module-card"><span class="module-icon cyan">${icon('clipboard')}</span><h3>Produtividade da oficina</h3><p>Tempo por OS, técnico, baia e tipo de serviço.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article><article class="module-card"><span class="module-icon amber">${icon('box')}</span><h3>Movimentação de estoque</h3><p>Consumo, perdas, compras e itens abaixo do mínimo.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article></section><div class="empty-state" style="margin-top:18px"><div><div class="empty-state-icon" style="margin-left:auto;margin-right:auto">${icon('chart')}</div><h3>Relatórios detalhados entram na próxima etapa</h3><p>O protótipo já reservou os espaços para gráficos e exportação local em PDF/CSV.</p></div></div>`; }
-
 function renderSettings() { return `${pageHeader('Sistema', 'Usuários e permissões', 'Crie logins e determine quais módulos cada pessoa poderá acessar.', '<button class="button button-primary" data-action="new-user">'+icon('plus')+' Novo login</button>')}<section class="panel table-panel" style="margin-top:0">${panelHeader('Acessos da equipe', 'Cada login possui permissões próprias dentro do mesmo sistema.')}<div class="table-wrap"><table><thead><tr><th>Usuário</th><th>Login</th><th>Perfil</th><th>Módulos liberados</th><th>Status</th><th></th></tr></thead><tbody>${state.users.map((user) => `<tr><td><div class="cell-primary"><span class="user-row-avatar">${initials(user.name)}</span><div>${esc(user.name)}<span class="cell-secondary">ID ${String(user.id).padStart(3, '0')}</span></div></div></td><td>${esc(user.login)}</td><td><span class="role-label">${esc(user.role)}<small>${user.admin ? 'Acesso administrativo total' : 'Permissões personalizadas'}</small></span></td><td><div class="permission-list">${user.admin ? '<span class="permission-chip admin">Todos os módulos</span>' : user.permissions.map((permission) => `<span class="permission-chip">${esc(permissionLabel(permission))}</span>`).join('')}</div></td><td>${statusPill('done', 'Ativo')}</td><td><button class="action-dots" data-action="show-toast">•••</button></td></tr>`).join('')}</tbody></table></div></section><div class="access-note">${icon('database')}<span>Arquitetura planejada: monólito modular com um único banco SQLite. O administrador controla usuários, permissões e auditoria; cada módulo permanece isolado em sua própria camada de negócio.</span></div>`; }
 
 function renderBackup() { return `${pageHeader('Sistema', 'Backup local', 'Proteja os dados da oficina com cópias simples e restauráveis.', '<button class="button button-primary" data-action="backup">'+icon('database')+' Fazer backup agora</button>')}<section class="split-layout"><article class="panel">${panelHeader('Status do banco local', 'O SQLite ficará armazenado neste computador quando o backend for conectado.')}<div class="offline-status" style="padding:9px 0 17px"><span class="status-pulse"></span><div><strong style="font-size:12px">Banco local protegido</strong><small style="font-size:10px">Última sincronização: hoje às 08:14</small></div></div><div class="progress-list"><div class="progress-line"><span>Uso do armazenamento</span><div class="progress-track"><div class="progress-fill cyan" style="width:28%"></div></div><b>28%</b></div></div></article><article class="panel">${panelHeader('Histórico de backups')}<div class="alert-list"><div class="alert-item"><div class="alert-icon" style="background:var(--green-soft);color:var(--green)">${icon('check')}</div><div class="alert-copy"><strong>backup-2026-11-05-0814.db</strong><span>Hoje • 2,4 MB</span></div><button class="text-link" data-action="show-toast">Restaurar</button></div><div class="alert-item"><div class="alert-icon" style="background:rgba(139,215,245,.1);color:var(--cyan)">${icon('database')}</div><div class="alert-copy"><strong>backup-2026-11-04-1810.db</strong><span>Ontem • 2,3 MB</span></div><button class="text-link" data-action="show-toast">Restaurar</button></div></div></article></section>`; }
@@ -167,7 +189,7 @@ function renderGeneric(view) { const [section, title] = titles[view]; return `${
 function renderView() {
   if (!state.authenticated || !state.currentUser) return;
   if (!canAccess(state.view)) state.view = 'dashboard';
-  const views = { dashboard: renderDashboard, orders: renderOrders, customers: renderCustomers, inventory: renderInventory, services: renderServices, schedule: renderSchedule, diagnostics: renderDiagnostics, finance: renderFinance, reports: renderReports, settings: renderSettings, backup: renderBackup };
+  const views = { dashboard: renderDashboard, orders: renderOrders, customers: renderCustomers, sales: renderSales, inventory: renderInventory, services: renderServices, schedule: renderSchedule, diagnostics: renderDiagnostics, finance: renderFinance, reports: renderReports, settings: renderSettings, backup: renderBackup };
   document.getElementById('view').innerHTML = (views[state.view] || (() => renderGeneric(state.view)))();
   const [section, current] = titles[state.view] || titles.dashboard;
   document.getElementById('breadcrumb-section').textContent = section;
@@ -200,6 +222,14 @@ function openStockModal() {
   setTimeout(() => modal.querySelector('input[name="name"]')?.focus(), 50);
 }
 function closeStockModal() { const modal = document.getElementById('stock-modal-backdrop'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }
+function openCustomerModal() { const modal = document.getElementById('customer-modal-backdrop'); modal.classList.add('is-open'); modal.setAttribute('aria-hidden', 'false'); setTimeout(() => modal.querySelector('input[name="name"]')?.focus(), 50); }
+function closeCustomerModal() { const modal = document.getElementById('customer-modal-backdrop'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }
+function openVehicleModal() { const client = state.clients.find((item) => item.id === Number(state.saleClientId)) || state.clients[0]; if (!client) { showToast('Cadastre um cliente antes de vincular um veículo.', 'error'); return; } state.saleClientId = client.id; document.getElementById('vehicle-client-name').textContent = client.name; const modal = document.getElementById('vehicle-modal-backdrop'); modal.classList.add('is-open'); modal.setAttribute('aria-hidden', 'false'); setTimeout(() => modal.querySelector('input[name="plate"]')?.focus(), 50); }
+function closeVehicleModal() { const modal = document.getElementById('vehicle-modal-backdrop'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }
+function catalogItemById(id) { const service = serviceCatalog.find((item) => item.id === id); if (service) return service; const product = state.inventory.find((item) => `prod-${item.code}` === id); return product ? { id, kind: 'product', name: product.name, code: product.code, category: 'Produto', price: product.price, unit: product.unit } : null; }
+function addSaleItem(id) { const item = catalogItemById(id); if (!item) return; const existing = state.saleCart.find((entry) => entry.id === id); if (existing) existing.quantity += 1; else state.saleCart.push({ ...item, quantity: 1 }); renderView(); showToast(`${item.name} adicionado à venda.`); }
+function removeSaleItem(id) { state.saleCart = state.saleCart.filter((item) => item.id !== id); renderView(); }
+function generateOrderFromSale() { const client = state.clients.find((item) => item.id === Number(state.saleClientId)); const vehicle = client?.vehicles.find((item) => item.id === Number(state.saleVehicleId)); if (!client || !vehicle || !state.saleCart.length) { showToast('Selecione cliente, veículo e pelo menos um item.', 'error'); return; } const total = state.saleCart.reduce((sum, item) => sum + item.price * item.quantity, 0); const nextNumber = 249 + state.orders.length - 5; state.orders.unshift({ id: `OS-${String(nextNumber).padStart(4, '0')}`, customer: client.name, plate: vehicle.plate, vehicle: `${vehicle.brand} ${vehicle.model} ${vehicle.year}`, service: state.saleCart.map((item) => `${item.name}${item.quantity > 1 ? ` x${item.quantity}` : ''}`).join(', '), technician: 'A definir', status: 'waiting', statusLabel: 'Aguardando triagem', delivery: 'A definir', total }); state.saleCart = []; state.saleSearch = ''; state.view = 'orders'; renderView(); showToast(`OS criada para ${client.name}: venda de ${money(total)}.`); }
 function registerUnit() { const unit = window.prompt('Informe a nova unidade. Ex.: lata, tubo ou frasco'); if (!unit) return; const normalized = unit.trim().toLowerCase(); if (!normalized || state.units.includes(normalized)) { showToast('Essa unidade já está cadastrada ou é inválida.', 'error'); return; } state.units.push(normalized); renderView(); showToast(`Unidade ${normalized} adicionada ao catálogo.`); }
 function adjustInventory() { const code = window.prompt('Digite o código do item para ajustar o saldo'); if (!code) return; const item = state.inventory.find((entry) => entry.code.toLowerCase() === code.trim().toLowerCase()); if (!item) { showToast('Item não encontrado no inventário.', 'error'); return; } const quantity = window.prompt(`Novo saldo para ${item.name} (${item.unit})`, String(item.stock)); if (quantity === null || Number.isNaN(Number(quantity)) || Number(quantity) < 0) { showToast('Saldo inválido para o ajuste.', 'error'); return; } item.stock = Number(quantity); renderView(); showToast(`Inventário ajustado: ${item.name}.`); }
 function syncPermissionSelection() {
@@ -215,13 +245,21 @@ function bindEvents() {
     const nav = event.target.closest('[data-view]');
     if (nav) { if (!canAccess(nav.dataset.view)) { showToast('Seu login não possui acesso a este módulo.', 'error'); return; } state.view = nav.dataset.view; state.status = 'all'; renderView(); return; }
     if (event.target.closest('[data-action="new-order"]')) { openModal(); return; }
-    if (event.target.closest('[data-action="new-user"]')) { openUserModal(); return; }
+    if (event.target.closest('[data-action="new-user"]')) { if (!state.currentUser?.admin) { showToast('Apenas o administrador pode criar novos logins.', 'error'); return; } openUserModal(); return; }
     if (event.target.closest('[data-action="new-stock"]')) { openStockModal(); return; }
     if (event.target.closest('[data-action="inventory-report"]')) { showToast('Relatório de estoque preparado para exportação local em PDF/CSV.'); return; }
     if (event.target.closest('[data-action="inventory-adjust"]')) { adjustInventory(); return; }
     if (event.target.closest('[data-action="new-unit"]')) { registerUnit(); return; }
     if (event.target.closest('[data-action="logout"]')) { logout(); return; }
-    if (event.target.closest('[data-action="new-client"]')) { showToast('Cadastro de cliente será conectado ao SQLite na próxima etapa.'); return; }
+    if (event.target.closest('[data-action="new-client"]')) { openCustomerModal(); return; }
+    if (event.target.closest('[data-action="new-vehicle"]')) { openVehicleModal(); return; }
+    const selectedClient = event.target.closest('[data-select-client]');
+    if (selectedClient) { state.saleClientId = Number(selectedClient.dataset.selectClient); const client = state.clients.find((item) => item.id === state.saleClientId); state.saleVehicleId = client?.vehicles[0]?.id || null; renderView(); return; }
+    const addSale = event.target.closest('[data-add-sale]');
+    if (addSale) { addSaleItem(addSale.dataset.addSale); return; }
+    const removeSale = event.target.closest('[data-remove-sale]');
+    if (removeSale) { removeSaleItem(removeSale.dataset.removeSale); return; }
+    if (event.target.closest('[data-action="generate-os"]')) { generateOrderFromSale(); return; }
     if (event.target.closest('[data-action="backup"]')) { showToast('Backup demonstrativo criado localmente.'); return; }
     if (event.target.closest('[data-action="show-toast"]')) { showToast('Ação demonstrativa registrada no protótipo.'); return; }
     const orderAction = event.target.closest('[data-order-id]');
@@ -229,6 +267,8 @@ function bindEvents() {
     if (event.target.closest('[data-close-modal]') || event.target.id === 'modal-backdrop') closeModal();
     if (event.target.closest('[data-close-user-modal]') || event.target.id === 'user-modal-backdrop') closeUserModal();
     if (event.target.closest('[data-close-stock-modal]') || event.target.id === 'stock-modal-backdrop') closeStockModal();
+    if (event.target.closest('[data-close-customer-modal]') || event.target.id === 'customer-modal-backdrop') closeCustomerModal();
+    if (event.target.closest('[data-close-vehicle-modal]') || event.target.id === 'vehicle-modal-backdrop') closeVehicleModal();
   });
   document.getElementById('login-form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -238,6 +278,7 @@ function bindEvents() {
     login(user);
   });
   document.getElementById('global-search').addEventListener('input', (event) => { state.search = event.target.value; renderView(); });
+  document.addEventListener('input', (event) => { if (event.target.id === 'sale-search') { state.saleSearch = event.target.value; renderView(); const search = document.getElementById('sale-search'); search?.focus(); search?.setSelectionRange(state.saleSearch.length, state.saleSearch.length); } });
   document.addEventListener('change', (event) => { if (event.target.id === 'status-filter') { state.status = event.target.value; renderView(); } });
   document.addEventListener('change', (event) => {
     if (event.target.id === 'inventory-category') { state.inventoryCategory = event.target.value; renderView(); }
@@ -246,9 +287,12 @@ function bindEvents() {
   document.addEventListener('change', (event) => {
     if (event.target.id === 'user-role') syncPermissionSelection();
     if (event.target.id === 'select-all-permissions') document.querySelectorAll('#permission-grid input[name="permission"]').forEach((input) => { input.checked = event.target.checked; });
+    if (event.target.id === 'sale-client') { state.saleClientId = Number(event.target.value); const client = state.clients.find((item) => item.id === state.saleClientId); state.saleVehicleId = client?.vehicles[0]?.id || null; state.saleCart = []; renderView(); }
+    if (event.target.id === 'sale-vehicle') { state.saleVehicleId = Number(event.target.value); renderView(); }
   });
   document.getElementById('new-user-form').addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!state.currentUser?.admin) { closeUserModal(); showToast('Apenas o administrador pode criar novos logins.', 'error'); return; }
     const data = new FormData(event.target);
     const loginValue = String(data.get('login')).trim().toLowerCase();
     if (state.users.some((user) => user.login.toLowerCase() === loginValue)) { showToast('Este login já está em uso.', 'error'); return; }
@@ -267,6 +311,27 @@ function bindEvents() {
     state.inventory.push({ name: data.get('name'), code, category: data.get('category'), stock: Number(data.get('stock')), min: Number(data.get('min')), max: Number(data.get('max')), unit: data.get('unit'), price: Number(data.get('price')), cost: Number(data.get('cost')), location: data.get('location'), supplier: data.get('supplier') || 'Não informado' });
     event.target.reset(); closeStockModal(); state.view = 'inventory'; renderView(); showToast('Item cadastrado no estoque local.');
   });
+  document.getElementById('new-customer-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    const plate = String(data.get('plate')).trim().toUpperCase();
+    if (state.clients.some((client) => client.vehicles.some((vehicle) => vehicle.plate === plate))) { showToast('Esta placa já está vinculada a outro cadastro.', 'error'); return; }
+    const id = Math.max(...state.clients.map((client) => client.id), 0) + 1;
+    const vehicleId = Math.max(...state.clients.flatMap((client) => client.vehicles.map((vehicle) => vehicle.id)), 100) + 1;
+    state.clients.push({ id, name: data.get('name'), cpf: data.get('cpf'), email: data.get('email'), phone: data.get('phone'), birth: data.get('birth') || 'Não informado', address: data.get('address'), vehicles: [{ id: vehicleId, plate, brand: data.get('brand'), model: data.get('model'), year: data.get('year'), color: data.get('color') || 'Não informado', vin: data.get('vin') || 'Não informado', mileage: Number(data.get('mileage')) || 0 }], visits: 0, last: 'Novo cadastro' });
+    state.saleClientId = id; state.saleVehicleId = vehicleId; event.target.reset(); closeCustomerModal(); state.view = 'customers'; renderView(); showToast(`Cliente ${String(data.get('name')).split(' ')[0]} cadastrado com veículo vinculado.`);
+  });
+  document.getElementById('new-vehicle-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const client = state.clients.find((item) => item.id === Number(state.saleClientId));
+    const data = new FormData(event.target);
+    const plate = String(data.get('plate')).trim().toUpperCase();
+    if (!client) { closeVehicleModal(); showToast('Cliente não encontrado.', 'error'); return; }
+    if (state.clients.some((item) => item.vehicles.some((vehicle) => vehicle.plate === plate))) { showToast('Esta placa já está vinculada a outro cadastro.', 'error'); return; }
+    const vehicleId = Math.max(...state.clients.flatMap((item) => item.vehicles.map((vehicle) => vehicle.id)), 100) + 1;
+    client.vehicles.push({ id: vehicleId, plate, brand: data.get('brand'), model: data.get('model'), year: data.get('year'), color: data.get('color') || 'Não informado', vin: data.get('vin') || 'Não informado', mileage: Number(data.get('mileage')) || 0 });
+    state.saleVehicleId = vehicleId; event.target.reset(); closeVehicleModal(); renderView(); showToast(`Veículo ${plate} vinculado a ${client.name}.`);
+  });
   document.getElementById('new-order-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
@@ -275,7 +340,7 @@ function bindEvents() {
     state.orders.unshift({ id: `OS-${String(nextNumber).padStart(4, '0')}`, customer: data.get('customer'), plate: String(data.get('plate')).toUpperCase(), vehicle: data.get('vehicle'), service: data.get('service'), technician: 'A definir', status: 'waiting', statusLabel: 'Aguardando triagem', delivery, total: 0 });
     event.target.reset(); closeModal(); state.view = 'orders'; state.status = 'all'; renderView(); showToast('Nova ordem criada no protótipo offline.');
   });
-  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModal(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { closeModal(); closeUserModal(); closeStockModal(); closeCustomerModal(); closeVehicleModal(); } });
 }
 
 bindEvents();
