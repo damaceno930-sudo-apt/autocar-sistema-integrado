@@ -4,9 +4,15 @@
 
 Criar um protótipo em HTML, CSS e JavaScript, 100% offline, sem APIs externas, fontes remotas, CDN, banco gerenciado ou dependência de Internet. A referência visual enviada define a direção: painel escuro de oficina, azul-marinho profundo, laranja como cor de ação, superfícies grafite, textos claros e ícones automotivos em SVG inline/local.
 
+## Arquitetura do sistema
+
+O produto será um monólito modular: uma aplicação única, um processo local e um banco SQLite compartilhado. Cada módulo terá sua própria camada de rotas, serviços, regras e telas, mas todos usarão o mesmo núcleo de autenticação, auditoria e acesso a dados. O administrador poderá criar logins e liberar módulos individualmente.
+
+Quando o backend Python/SQLite for conectado, a base deverá conter usuários, credenciais com hash, perfis, permissões por módulo, sessões, logs de auditoria e os dados operacionais. A interface atual simula esse fluxo em memória para validar a experiência.
+
 ## Objetivo do protótipo
 
-Demonstrar a navegação e a hierarquia visual do sistema antes da implementação do backend Python/SQLite. O protótipo terá dados demonstrativos em memória, busca local, alternância entre módulos, filtros de OS, atualização visual de status, modal para nova ordem e toast de confirmação. Nenhuma alteração será persistida ainda.
+Demonstrar a navegação, o login e a hierarquia visual do sistema antes da implementação do backend Python/SQLite. O protótipo terá dados demonstrativos em memória, busca local, alternância entre módulos, filtros de OS, atualização visual de status, criação de usuários, seleção de permissões por módulo, bloqueio de telas não autorizadas, modal para nova ordem e toast de confirmação. Nenhuma alteração será persistida ainda.
 
 ## Módulos representados
 

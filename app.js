@@ -25,8 +25,15 @@ const icons = {
 
 const state = {
   view: 'dashboard',
+  authenticated: false,
+  currentUser: null,
   search: '',
   status: 'all',
+  users: [
+    { id: 1, name: 'Rafael Costa', login: 'admin@autocar.local', password: 'admin123', role: 'Administrador', admin: true, permissions: ['all'] },
+    { id: 2, name: 'João Mendes', login: 'joao.mendes', password: 'oficina123', role: 'Técnico', admin: false, permissions: ['dashboard', 'orders', 'customers', 'diagnostics'] },
+    { id: 3, name: 'Camila Prado', login: 'camila.prado', password: 'oficina123', role: 'Recepção', admin: false, permissions: ['dashboard', 'orders', 'customers', 'schedule'] }
+  ],
   orders: [
     { id: 'OS-0248', customer: 'Marcos Almeida', plate: 'RZD-4H81', vehicle: 'Toyota Corolla 2020', service: 'Revisão preventiva', technician: 'João Mendes', status: 'progress', statusLabel: 'Em serviço', delivery: 'Hoje, 16:30', total: 1280.5 },
     { id: 'OS-0247', customer: 'Camila Rocha', plate: 'GKA-9B62', vehicle: 'Honda HR-V 2022', service: 'Freios e suspensão', technician: 'Lucas Ferreira', status: 'waiting', statusLabel: 'Aguardando peça', delivery: 'Hoje, 18:00', total: 845.0 },
@@ -52,6 +59,10 @@ const titles = {
   dashboard: ['Visão geral', 'Dashboard'], orders: ['Operação', 'Ordens de serviço'], customers: ['Operação', 'Clientes e veículos'], inventory: ['Operação', 'Estoque e peças'], services: ['Operação', 'Serviços e preços'], schedule: ['Operação', 'Agendamentos'], diagnostics: ['Gestão', 'Diagnóstico'], finance: ['Gestão', 'Financeiro'], reports: ['Gestão', 'Relatórios'], settings: ['Sistema', 'Configurações'], backup: ['Sistema', 'Backup local']
 };
 
+const moduleCatalog = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' }, { id: 'orders', label: 'Ordens de serviço', icon: 'clipboard' }, { id: 'customers', label: 'Clientes e veículos', icon: 'users' }, { id: 'inventory', label: 'Estoque e peças', icon: 'box' }, { id: 'services', label: 'Serviços e preços', icon: 'wrench' }, { id: 'schedule', label: 'Agendamentos', icon: 'calendar' }, { id: 'diagnostics', label: 'Diagnóstico', icon: 'scan' }, { id: 'finance', label: 'Financeiro', icon: 'wallet' }, { id: 'reports', label: 'Relatórios', icon: 'chart' }, { id: 'settings', label: 'Configurações', icon: 'settings' }, { id: 'backup', label: 'Backup local', icon: 'database' }
+];
+
 function icon(name, className = '') {
   return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.dashboard}</svg>`;
 }
@@ -68,6 +79,36 @@ function renderIcons() {
     const name = el.dataset.icon;
     if (!el.querySelector('svg')) el.innerHTML = icon(name);
   });
+}
+
+function canAccess(view) { return Boolean(state.currentUser && (state.currentUser.admin || state.currentUser.permissions.includes(view))); }
+function permissionLabel(id) { return moduleCatalog.find((module) => module.id === id)?.label || id; }
+function initials(name) { return name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase(); }
+function updateSessionUI() {
+  if (!state.currentUser) return;
+  document.getElementById('session-user-name').textContent = state.currentUser.name;
+  document.getElementById('session-user-role').textContent = state.currentUser.role;
+  document.getElementById('session-avatar').textContent = initials(state.currentUser.name);
+  document.querySelectorAll('.nav-item').forEach((item) => { item.style.display = canAccess(item.dataset.view) ? 'flex' : 'none'; });
+}
+function login(user) {
+  state.currentUser = user;
+  state.authenticated = true;
+  document.getElementById('auth-screen').classList.add('is-hidden');
+  document.getElementById('app-shell').classList.remove('is-hidden');
+  document.getElementById('login-error').textContent = '';
+  state.view = 'dashboard';
+  updateSessionUI();
+  renderView();
+  showToast(`Olá, ${user.name.split(' ')[0]}. Acesso liberado.`);
+}
+function logout() {
+  state.authenticated = false;
+  state.currentUser = null;
+  document.getElementById('app-shell').classList.add('is-hidden');
+  document.getElementById('auth-screen').classList.remove('is-hidden');
+  document.getElementById('login-form').reset();
+  document.querySelector('#login-form input[name="login"]').focus();
 }
 
 function renderDashboard() {
@@ -107,19 +148,22 @@ function renderFinance() { return `${pageHeader('Gestão', 'Financeiro', 'Visão
 function renderReports() { return `${pageHeader('Gestão', 'Relatórios', 'Indicadores operacionais para decisões mais rápidas.')}<section class="module-grid"><article class="module-card"><span class="module-icon orange">${icon('chart')}</span><h3>Desempenho financeiro</h3><p>Receita, margem, ticket médio e evolução mensal.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article><article class="module-card"><span class="module-icon cyan">${icon('clipboard')}</span><h3>Produtividade da oficina</h3><p>Tempo por OS, técnico, baia e tipo de serviço.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article><article class="module-card"><span class="module-icon amber">${icon('box')}</span><h3>Movimentação de estoque</h3><p>Consumo, perdas, compras e itens abaixo do mínimo.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article></section><div class="empty-state" style="margin-top:18px"><div><div class="empty-state-icon" style="margin-left:auto;margin-right:auto">${icon('chart')}</div><h3>Relatórios detalhados entram na próxima etapa</h3><p>O protótipo já reservou os espaços para gráficos e exportação local em PDF/CSV.</p></div></div>`; }
 function renderReports() { return `${pageHeader('Gestão', 'Relatórios', 'Indicadores operacionais para decisões mais rápidas.')}<section class="module-grid"><article class="module-card"><span class="module-icon orange">${icon('chart')}</span><h3>Desempenho financeiro</h3><p>Receita, margem, ticket médio e evolução mensal.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article><article class="module-card"><span class="module-icon cyan">${icon('clipboard')}</span><h3>Produtividade da oficina</h3><p>Tempo por OS, técnico, baia e tipo de serviço.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article><article class="module-card"><span class="module-icon amber">${icon('box')}</span><h3>Movimentação de estoque</h3><p>Consumo, perdas, compras e itens abaixo do mínimo.</p><button class="text-link" data-action="show-toast">Gerar relatório →</button></article></section><div class="empty-state" style="margin-top:18px"><div><div class="empty-state-icon" style="margin-left:auto;margin-right:auto">${icon('chart')}</div><h3>Relatórios detalhados entram na próxima etapa</h3><p>O protótipo já reservou os espaços para gráficos e exportação local em PDF/CSV.</p></div></div>`; }
 
-function renderSettings() { return `${pageHeader('Sistema', 'Configurações', 'Personalize a operação da sua oficina sem depender da Internet.')}<section class="module-grid"><article class="module-card"><span class="module-icon orange">${icon('settings')}</span><h3>Dados da oficina</h3><p>Nome, endereço, contatos, logo e preferências de impressão.</p><button class="text-link" data-action="show-toast">Abrir →</button></article><article class="module-card"><span class="module-icon cyan">${icon('users')}</span><h3>Usuários e permissões</h3><p>Perfis para administrador, recepção, técnico e financeiro.</p><button class="text-link" data-action="show-toast">Abrir →</button></article><article class="module-card"><span class="module-icon green">${icon('receipt')}</span><h3>Impostos e pagamentos</h3><p>Formas de pagamento, descontos e regras financeiras.</p><button class="text-link" data-action="show-toast">Abrir →</button></article></section>`; }
+function renderSettings() { return `${pageHeader('Sistema', 'Usuários e permissões', 'Crie logins e determine quais módulos cada pessoa poderá acessar.', '<button class="button button-primary" data-action="new-user">'+icon('plus')+' Novo login</button>')}<section class="panel table-panel" style="margin-top:0">${panelHeader('Acessos da equipe', 'Cada login possui permissões próprias dentro do mesmo sistema.')}<div class="table-wrap"><table><thead><tr><th>Usuário</th><th>Login</th><th>Perfil</th><th>Módulos liberados</th><th>Status</th><th></th></tr></thead><tbody>${state.users.map((user) => `<tr><td><div class="cell-primary"><span class="user-row-avatar">${initials(user.name)}</span><div>${esc(user.name)}<span class="cell-secondary">ID ${String(user.id).padStart(3, '0')}</span></div></div></td><td>${esc(user.login)}</td><td><span class="role-label">${esc(user.role)}<small>${user.admin ? 'Acesso administrativo total' : 'Permissões personalizadas'}</small></span></td><td><div class="permission-list">${user.admin ? '<span class="permission-chip admin">Todos os módulos</span>' : user.permissions.map((permission) => `<span class="permission-chip">${esc(permissionLabel(permission))}</span>`).join('')}</div></td><td>${statusPill('done', 'Ativo')}</td><td><button class="action-dots" data-action="show-toast">•••</button></td></tr>`).join('')}</tbody></table></div></section><div class="access-note">${icon('database')}<span>Arquitetura planejada: monólito modular com um único banco SQLite. O administrador controla usuários, permissões e auditoria; cada módulo permanece isolado em sua própria camada de negócio.</span></div>`; }
 
 function renderBackup() { return `${pageHeader('Sistema', 'Backup local', 'Proteja os dados da oficina com cópias simples e restauráveis.', '<button class="button button-primary" data-action="backup">'+icon('database')+' Fazer backup agora</button>')}<section class="split-layout"><article class="panel">${panelHeader('Status do banco local', 'O SQLite ficará armazenado neste computador quando o backend for conectado.')}<div class="offline-status" style="padding:9px 0 17px"><span class="status-pulse"></span><div><strong style="font-size:12px">Banco local protegido</strong><small style="font-size:10px">Última sincronização: hoje às 08:14</small></div></div><div class="progress-list"><div class="progress-line"><span>Uso do armazenamento</span><div class="progress-track"><div class="progress-fill cyan" style="width:28%"></div></div><b>28%</b></div></div></article><article class="panel">${panelHeader('Histórico de backups')}<div class="alert-list"><div class="alert-item"><div class="alert-icon" style="background:var(--green-soft);color:var(--green)">${icon('check')}</div><div class="alert-copy"><strong>backup-2026-11-05-0814.db</strong><span>Hoje • 2,4 MB</span></div><button class="text-link" data-action="show-toast">Restaurar</button></div><div class="alert-item"><div class="alert-icon" style="background:rgba(139,215,245,.1);color:var(--cyan)">${icon('database')}</div><div class="alert-copy"><strong>backup-2026-11-04-1810.db</strong><span>Ontem • 2,3 MB</span></div><button class="text-link" data-action="show-toast">Restaurar</button></div></div></article></section>`; }
 
 function renderGeneric(view) { const [section, title] = titles[view]; return `${pageHeader(section, title, 'Módulo preparado para a próxima etapa do sistema offline.')}<div class="empty-state"><div><div class="empty-state-icon" style="margin-left:auto;margin-right:auto">${icon('settings')}</div><h3>Área em construção</h3><p>Esta tela já faz parte da navegação do protótipo e receberá os fluxos completos conectados ao SQLite.</p></div></div>`; }
 
 function renderView() {
+  if (!state.authenticated || !state.currentUser) return;
+  if (!canAccess(state.view)) state.view = 'dashboard';
   const views = { dashboard: renderDashboard, orders: renderOrders, customers: renderCustomers, inventory: renderInventory, services: renderServices, schedule: renderSchedule, diagnostics: renderDiagnostics, finance: renderFinance, reports: renderReports, settings: renderSettings, backup: renderBackup };
   document.getElementById('view').innerHTML = (views[state.view] || (() => renderGeneric(state.view)))();
   const [section, current] = titles[state.view] || titles.dashboard;
   document.getElementById('breadcrumb-section').textContent = section;
   document.getElementById('breadcrumb-current').textContent = current;
   document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === state.view));
+  updateSessionUI();
   renderIcons();
 }
 
@@ -127,21 +171,65 @@ function showToast(message, type = 'success') { const toast = document.createEle
 function openModal() { const modal = document.getElementById('modal-backdrop'); modal.classList.add('is-open'); modal.setAttribute('aria-hidden', 'false'); setTimeout(() => modal.querySelector('input')?.focus(), 50); }
 function closeModal() { const modal = document.getElementById('modal-backdrop'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }
 function completeOrder(id) { const order = state.orders.find((item) => item.id === id); if (!order) return; order.status = 'done'; order.statusLabel = 'Pronto para entrega'; renderView(); showToast(`${id} marcada como pronta para entrega.`); }
+function openUserModal() {
+  const grid = document.getElementById('permission-grid');
+  grid.innerHTML = moduleCatalog.map((module) => `<label class="permission-option"><input type="checkbox" name="permission" value="${module.id}" /><span>${icon(module.icon)}${module.label}</span></label>`).join('');
+  const modal = document.getElementById('user-modal-backdrop');
+  modal.classList.add('is-open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.getElementById('select-all-permissions').checked = false;
+  setTimeout(() => modal.querySelector('input[name="name"]')?.focus(), 50);
+  renderIcons();
+}
+function closeUserModal() { const modal = document.getElementById('user-modal-backdrop'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }
+function syncPermissionSelection() {
+  const role = document.getElementById('user-role').value;
+  const isAdmin = role === 'admin';
+  document.querySelectorAll('#permission-grid input[name="permission"]').forEach((input) => { input.checked = isAdmin || input.checked; input.disabled = isAdmin; input.closest('.permission-option').classList.toggle('is-locked', isAdmin); });
+  document.getElementById('select-all-permissions').checked = isAdmin || [...document.querySelectorAll('#permission-grid input[name="permission"]')].every((input) => input.checked);
+  document.getElementById('select-all-permissions').disabled = isAdmin;
+}
 
 function bindEvents() {
   document.addEventListener('click', (event) => {
     const nav = event.target.closest('[data-view]');
-    if (nav) { state.view = nav.dataset.view; state.status = 'all'; renderView(); return; }
+    if (nav) { if (!canAccess(nav.dataset.view)) { showToast('Seu login não possui acesso a este módulo.', 'error'); return; } state.view = nav.dataset.view; state.status = 'all'; renderView(); return; }
     if (event.target.closest('[data-action="new-order"]')) { openModal(); return; }
+    if (event.target.closest('[data-action="new-user"]')) { openUserModal(); return; }
+    if (event.target.closest('[data-action="logout"]')) { logout(); return; }
     if (event.target.closest('[data-action="new-client"]')) { showToast('Cadastro de cliente será conectado ao SQLite na próxima etapa.'); return; }
     if (event.target.closest('[data-action="backup"]')) { showToast('Backup demonstrativo criado localmente.'); return; }
     if (event.target.closest('[data-action="show-toast"]')) { showToast('Ação demonstrativa registrada no protótipo.'); return; }
     const orderAction = event.target.closest('[data-order-id]');
     if (orderAction) { completeOrder(orderAction.dataset.orderId); return; }
     if (event.target.closest('[data-close-modal]') || event.target.id === 'modal-backdrop') closeModal();
+    if (event.target.closest('[data-close-user-modal]') || event.target.id === 'user-modal-backdrop') closeUserModal();
+  });
+  document.getElementById('login-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    const user = state.users.find((item) => item.login.toLowerCase() === String(data.get('login')).trim().toLowerCase() && item.password === data.get('password'));
+    if (!user) { document.getElementById('login-error').textContent = 'Login ou senha inválidos. Tente o acesso demonstrativo abaixo.'; return; }
+    login(user);
   });
   document.getElementById('global-search').addEventListener('input', (event) => { state.search = event.target.value; renderView(); });
   document.addEventListener('change', (event) => { if (event.target.id === 'status-filter') { state.status = event.target.value; renderView(); } });
+  document.addEventListener('change', (event) => {
+    if (event.target.id === 'user-role') syncPermissionSelection();
+    if (event.target.id === 'select-all-permissions') document.querySelectorAll('#permission-grid input[name="permission"]').forEach((input) => { input.checked = event.target.checked; });
+  });
+  document.getElementById('new-user-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    const loginValue = String(data.get('login')).trim().toLowerCase();
+    if (state.users.some((user) => user.login.toLowerCase() === loginValue)) { showToast('Este login já está em uso.', 'error'); return; }
+    const role = data.get('role');
+    const roleNames = { reception: 'Recepção', technician: 'Técnico', finance: 'Financeiro', manager: 'Gestor', admin: 'Administrador' };
+    const admin = role === 'admin';
+    const permissions = admin ? ['all'] : [...document.querySelectorAll('#permission-grid input[name="permission"]:checked')].map((input) => input.value);
+    state.users.push({ id: state.users.length + 1, name: data.get('name'), login: loginValue, password: data.get('password'), role: roleNames[role], admin, permissions });
+    event.target.reset(); closeUserModal(); renderView(); showToast(`Login de ${String(data.get('name')).split(' ')[0]} criado com sucesso.`);
+  });
   document.getElementById('new-order-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
@@ -154,4 +242,5 @@ function bindEvents() {
 }
 
 bindEvents();
+renderIcons();
 renderView();

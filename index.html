@@ -9,7 +9,18 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <section class="auth-screen" id="auth-screen">
+      <div class="auth-glow auth-glow-one"></div><div class="auth-glow auth-glow-two"></div>
+      <div class="auth-card">
+        <div class="auth-brand"><div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 44 44" role="img"><path d="M8.5 26.4 12 15.8c.7-2.2 2.8-3.7 5.1-3.7h9.8c2.4 0 4.4 1.5 5.2 3.7l3.4 10.6"/><path d="M7.4 25.6h29.2v8.5a2.4 2.4 0 0 1-2.4 2.4H9.8a2.4 2.4 0 0 1-2.4-2.4v-8.5Z"/><path d="M12 20h20M12 31h.1M31.9 31h.1"/></svg></div><div><div class="brand-name">Auto<span>Car</span></div><div class="brand-subtitle">SISTEMA INTEGRADO</div></div></div>
+        <div class="auth-heading"><span class="eyebrow">Acesso seguro</span><h1>Entrar no sistema</h1><p>Gerencie sua oficina com permissões sob medida para cada função.</p></div>
+        <form id="login-form" class="auth-form"><label class="field"><span>Login</span><input name="login" type="text" required autocomplete="username" placeholder="Digite seu login" /></label><label class="field"><span>Senha</span><input name="password" type="password" required autocomplete="current-password" placeholder="Digite sua senha" /></label><div class="login-error" id="login-error"></div><button class="button button-primary auth-submit" type="submit">Entrar no sistema <span data-icon="arrow"></span></button></form>
+        <div class="auth-demo"><span class="status-pulse"></span><div><strong>Acesso demonstrativo do protótipo</strong><small>admin@autocar.local&nbsp; / &nbsp;admin123</small></div></div>
+      </div>
+      <div class="auth-footnote">Dados locais • Monólito modular • Banco SQLite</div>
+    </section>
+
+    <div class="app-shell is-hidden" id="app-shell">
       <aside class="sidebar" id="sidebar">
         <div class="brand-block">
           <div class="brand-mark" aria-hidden="true">
@@ -58,7 +69,7 @@
           <div class="topbar-actions">
             <label class="search-box" aria-label="Buscar no sistema"><span class="search-icon" data-icon="search"></span><input id="global-search" type="search" placeholder="Buscar cliente, placa ou OS..." autocomplete="off" /></label>
             <button class="icon-button" title="Central de avisos" aria-label="Central de avisos"><span data-icon="bell"></span><i></i></button>
-            <div class="user-profile"><span class="user-avatar">RC</span><div><strong>Rafael Costa</strong><small>Administrador</small></div><span class="chevron">⌄</span></div>
+            <button class="user-profile" data-action="logout" title="Sair do sistema"><span class="user-avatar" id="session-avatar">RC</span><div><strong id="session-user-name">Rafael Costa</strong><small id="session-user-role">Administrador</small></div><span class="chevron">⌄</span></button>
           </div>
         </header>
 
@@ -79,6 +90,16 @@
             <label class="field field-span-2"><span>Observação inicial</span><textarea name="notes" rows="3" placeholder="Relato do cliente ou observações da recepção"></textarea></label>
           </div>
           <div class="modal-footer"><button type="button" class="button button-ghost" data-close-modal>Cancelar</button><button type="submit" class="button button-primary"><span data-icon="plus"></span> Criar ordem</button></div>
+        </form>
+      </section>
+    </div>
+    <div class="modal-backdrop" id="user-modal-backdrop" aria-hidden="true">
+      <section class="modal modal-large" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+        <div class="modal-header"><div><span class="eyebrow">Controle de acesso</span><h2 id="user-modal-title">Novo login</h2></div><button class="modal-close" data-close-user-modal aria-label="Fechar">×</button></div>
+        <form id="new-user-form">
+          <div class="form-grid"><label class="field"><span>Nome completo</span><input name="name" required placeholder="Nome do colaborador" /></label><label class="field"><span>Login</span><input name="login" required placeholder="ex.: joao.mendes" /></label><label class="field"><span>Senha inicial</span><input name="password" type="password" required placeholder="Mínimo de 6 caracteres" /></label><label class="field"><span>Perfil base</span><select name="role" id="user-role"><option value="reception">Recepção</option><option value="technician">Técnico</option><option value="finance">Financeiro</option><option value="manager">Gestor</option><option value="admin">Administrador</option></select></label></div>
+          <div class="permission-block"><div class="permission-heading"><div><h3>Acessos aos módulos</h3><p>Defina exatamente quais áreas este login poderá visualizar.</p></div><label class="permission-toggle"><input type="checkbox" id="select-all-permissions" /><span>Selecionar todos</span></label></div><div class="permission-grid" id="permission-grid"></div></div>
+          <div class="modal-footer"><button type="button" class="button button-ghost" data-close-user-modal>Cancelar</button><button type="submit" class="button button-primary"><span data-icon="users"></span> Criar login</button></div>
         </form>
       </section>
     </div>

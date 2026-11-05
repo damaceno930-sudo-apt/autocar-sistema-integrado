@@ -30,3 +30,14 @@
 - [x] O código está separado em `index.html`, `styles.css` e `app.js`.
 - [x] O diagnóstico automático está registrado para JavaScript, HTML e CSS.
 - [x] O Preview responde na porta configurada e o JavaScript passou na validação de sintaxe.
+
+## Autenticação e permissões
+
+- [x] O protótipo exibe uma tela de login antes de liberar o sistema.
+- [x] Existe um login administrador demonstrativo capaz de acessar todos os módulos.
+- [x] O administrador pode criar outros logins pelo módulo Configurações.
+- [x] A criação de login permite definir nome, login, senha, perfil e módulos autorizados.
+- [x] Usuários sem permissão não visualizam o módulo na navegação e recebem bloqueio caso tentem acessá-lo.
+- [x] O protótipo possui logout e identificação do usuário conectado.
+- [x] A documentação registra a arquitetura de monólito modular com banco SQLite único.
+- [ ] Na próxima etapa, substituir a autenticação em memória por sessões e senhas com hash no backend Python/SQLite.
