@@ -346,3 +346,14 @@ form { padding: 20px 24px 24px; }
 
 .linked-client-banner { padding: 11px 12px; margin: 0 24px 18px; border: 1px solid rgba(139,215,245,.16); border-radius: 9px; background: rgba(139,215,245,.05); color: var(--slate-500); font-size: 10px; }
 .linked-client-banner strong { color: var(--cyan); }
+
+.service-tabs { display: flex; align-items: center; gap: 8px; padding: 5px; margin-bottom: 17px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.025); }
+.service-tab { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--slate-500); font-size: 10px; font-weight: 700; cursor: pointer; }
+.service-tab:hover, .service-tab.active { background: var(--orange-soft); color: var(--orange-bright); }
+.service-tab svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.service-tab span { display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 20px; background: rgba(255,255,255,.08); font-size: 9px; }
+.service-form-panel { max-width: 760px; padding: 0 0 22px; }
+.service-form-panel .form-section-title { padding: 20px 24px 0; margin-top: 0; }
+.service-form-panel form { padding-top: 20px; }
+.service-code { display: block; margin-top: 13px; color: var(--slate-500); font-size: 9px; letter-spacing: .2px; }
+@media (max-width: 620px) { .service-tabs { align-items: stretch; flex-direction: column; } .service-tab { justify-content: flex-start; } }

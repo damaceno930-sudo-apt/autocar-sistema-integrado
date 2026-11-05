@@ -55,3 +55,7 @@ O módulo de estoque deverá controlar cadastro de itens, código interno, categ
 ## Clientes, veículos e vendas
 
 O cadastro de clientes terá identificação, CPF/CNPJ, nascimento, telefone, e-mail e endereço. Cada cliente terá uma coleção de veículos vinculados com placa, marca, modelo, ano, cor, chassi/VIN e quilometragem. O módulo comercial será separado, mas integrado ao mesmo monólito: seleciona cliente e veículo, pesquisa serviços e produtos do catálogo, monta o carrinho da venda, calcula o total e gera a OS vinculada ao cliente, veículo e itens vendidos.
+
+## Serviços e preços
+
+O módulo possui abas separadas para consultar o catálogo e cadastrar novos serviços. Cada serviço terá nome, código, categoria, preço, duração estimada e descrição. Ao salvar, ele passa a integrar imediatamente o catálogo comercial usado pelo painel de Vendas e Nova OS.

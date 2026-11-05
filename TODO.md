@@ -10,3 +10,10 @@
 - [x] A venda gera uma nova OS vinculada ao cliente, veículo, serviços e produtos selecionados.
 - [ ] Na próxima etapa, persistir clientes, veículos, vendas, itens da OS e histórico no SQLite.
 - [x] A ficha do cliente permite vincular veículos adicionais ao mesmo cadastro, mantendo todos disponíveis para vendas e OS.
+
+## Serviços e preços
+
+- [x] O módulo possui uma aba de catálogo e uma aba de cadastro de novo serviço.
+- [x] O cadastro aceita nome, código, categoria, preço, duração estimada e descrição.
+- [x] O serviço salvo aparece no catálogo e fica disponível para pesquisa no painel de Vendas e Nova OS.
+- [ ] Na próxima etapa, persistir o catálogo de serviços no SQLite com histórico de alterações e regras de preço.
