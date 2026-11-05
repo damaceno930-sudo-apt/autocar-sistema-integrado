@@ -8,7 +8,7 @@
 
 ## Módulos navegáveis
 
-- [x] O protótipo permite acessar Dashboard, Ordens de Serviço, Clientes e Veículos, Estoque e Peças, Serviços e Orçamentos, Agendamentos, Diagnóstico, Financeiro, Frota, Relatórios, Configurações e Backup.
+- [x] O protótipo permite acessar Dashboard, Ordens de Serviço, Clientes e Veículos, Estoque e Peças, Serviços e Orçamentos, Agendamentos, Diagnóstico, Financeiro, Relatórios, Configurações e Backup.
 - [x] Cada módulo possui conteúdo demonstrativo coerente com uma oficina mecânica; algumas telas são placeholders intencionais do protótipo.
 
 ## Interações locais

@@ -18,7 +18,6 @@ Demonstrar a navegação e a hierarquia visual do sistema antes da implementaç�
 - Agendamentos: agenda diária por baia e técnico.
 - Diagnóstico: fila de diagnósticos e checklists.
 - Financeiro: caixa, contas a receber e indicadores de pagamento.
-- Frota: veículos em atendimento, manutenção e status operacional.
 - Relatórios, Configurações e Backup: telas de placeholder navegáveis.
 
 ## Design system
