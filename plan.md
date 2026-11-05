@@ -47,3 +47,7 @@ Demonstrar a navegação, o login e a hierarquia visual do sistema antes da impl
 ## Implementação e entrega
 
 Usar servidor estático local na porta 3000. Configurar diagnóstico JavaScript/HTML/CSS, validar sintaxe e verificar o manifesto de rotas. Depois, iniciar o Preview e criar um checkpoint com os arquivos do protótipo.
+
+## Estoque e peças
+
+O módulo de estoque deverá controlar cadastro de itens, código interno, categoria, fornecedor, localização, custo, preço de venda, saldo atual, mínimo e máximo. Cada item terá uma unidade configurável, incluindo `un.`, `pc`, `jogo`, `par`, `kit`, `cx`, `m`, `cm`, `mm`, `ml`, `l`, `g`, `kg` e `rolo`, com possibilidade de acrescentar outras unidades. O fluxo também contempla entradas, saídas vinculadas a ordens de serviço, ajustes de inventário físico, histórico de movimentações, alertas de reposição, valorização do estoque e relatórios exportáveis localmente.

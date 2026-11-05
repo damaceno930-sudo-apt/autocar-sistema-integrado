@@ -41,3 +41,12 @@
 - [x] O protótipo possui logout e identificação do usuário conectado.
 - [x] A documentação registra a arquitetura de monólito modular com banco SQLite único.
 - [ ] Na próxima etapa, substituir a autenticação em memória por sessões e senhas com hash no backend Python/SQLite.
+
+## Estoque completo e inventário
+
+- [x] O módulo exibe saldo, mínimo, máximo, custo armazenado e alertas de reposição.
+- [x] O cadastro demonstrativo permite informar descrição, código, categoria, unidade, localização, saldo, limites, custo, venda e fornecedor.
+- [x] O sistema apresenta variações de unidade como `un.`, `pc`, `jogo`, `par`, `kit`, `cx`, `m`, `cm`, `mm`, `ml`, `l`, `g`, `kg` e `rolo`.
+- [x] O estoque possui filtros por categoria e situação, inventário de itens e resumo de movimentações.
+- [x] O protótipo prevê relatório local de estoque e ajuste de inventário físico.
+- [ ] Na próxima etapa, persistir entradas, saídas, inventários e relatórios nas tabelas SQLite do monólito modular.

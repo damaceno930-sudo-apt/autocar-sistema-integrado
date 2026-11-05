@@ -29,6 +29,8 @@ const state = {
   currentUser: null,
   search: '',
   status: 'all',
+  inventoryCategory: 'all',
+  inventoryStatus: 'all',
   users: [
     { id: 1, name: 'Rafael Costa', login: 'admin@autocar.local', password: 'admin123', role: 'Administrador', admin: true, permissions: ['all'] },
     { id: 2, name: 'João Mendes', login: 'joao.mendes', password: 'oficina123', role: 'Técnico', admin: false, permissions: ['dashboard', 'orders', 'customers', 'diagnostics'] },
@@ -48,11 +50,14 @@ const state = {
     { name: 'Patrícia Nunes', phone: '(11) 98831-2220', vehicle: 'Volkswagen T-Cross 2021', plate: 'FTR-8C44', visits: 3, last: 'Ontem' }
   ],
   inventory: [
-    { name: 'Óleo 5W30 sintético', code: 'LUB-5W30-1L', stock: 4, min: 10, unit: 'un.', price: 42.9 },
-    { name: 'Pastilha de freio dianteira', code: 'FR-DI-482', stock: 2, min: 6, unit: 'jogo', price: 189.9 },
-    { name: 'Filtro de óleo Tecfil', code: 'FO-153', stock: 18, min: 8, unit: 'un.', price: 28.5 },
-    { name: 'Fluido de freio DOT 4', code: 'FL-DOT4-500', stock: 7, min: 5, unit: 'un.', price: 31.9 }
-  ]
+    { name: 'Óleo 5W30 sintético', code: 'LUB-5W30-1L', category: 'Lubrificantes', stock: 4, min: 10, max: 40, unit: 'un.', price: 42.9, cost: 28.5, location: 'Prateleira A1', supplier: 'LubriMax' },
+    { name: 'Pastilha de freio dianteira', code: 'FR-DI-482', category: 'Freios', stock: 2, min: 6, max: 20, unit: 'jogo', price: 189.9, cost: 125.0, location: 'Gaveta B3', supplier: 'AutoParts Brasil' },
+    { name: 'Filtro de óleo Tecfil', code: 'FO-153', category: 'Filtros', stock: 18, min: 8, max: 35, unit: 'pc', price: 28.5, cost: 16.9, location: 'Prateleira A2', supplier: 'Tecfil' },
+    { name: 'Fluido de freio DOT 4', code: 'FL-DOT4-500', category: 'Fluidos', stock: 7, min: 5, max: 20, unit: 'ml', price: 31.9, cost: 18.2, location: 'Armário C1', supplier: 'Bosch' },
+    { name: 'Mangueira cristal 8 mm', code: 'MAN-08-CR', category: 'Materiais', stock: 42, min: 15, max: 100, unit: 'm', price: 12.5, cost: 7.1, location: 'Rolo D1', supplier: 'HidroFlex' },
+    { name: 'Abraçadeira metálica 12 mm', code: 'ABR-12-M', category: 'Materiais', stock: 3, min: 10, max: 60, unit: 'cx', price: 48.0, cost: 31.0, location: 'Gaveta D2', supplier: 'FixParts' }
+  ],
+  units: ['un.', 'pc', 'jogo', 'par', 'kit', 'cx', 'm', 'cm', 'mm', 'ml', 'l', 'g', 'kg', 'rolo']
 };
 
 const titles = {
@@ -134,7 +139,12 @@ function renderCustomers() {
 }
 
 function renderInventory() {
-  return `${pageHeader('Operação', 'Estoque e peças', 'Controle de entradas, saídas e níveis de reposição.', '<button class="button button-primary" data-action="show-toast">'+icon('plus')+' Registrar entrada</button>')}<section class="kpi-grid"><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon amber">${icon('alert')}</span><span class="kpi-change down">atenção</span></div><strong class="kpi-value">04</strong><span class="kpi-label">Itens abaixo do mínimo</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon cyan">${icon('box')}</span><span class="kpi-change">+18 hoje</span></div><strong class="kpi-value">438</strong><span class="kpi-label">Itens em estoque</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon green">${icon('trend')}</span><span class="kpi-change">+14,2%</span></div><strong class="kpi-value">R$ 42,8k</strong><span class="kpi-label">Valor do estoque</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon orange">${icon('receipt')}</span><span class="kpi-change">este mês</span></div><strong class="kpi-value">R$ 8,6k</strong><span class="kpi-label">Consumo em OS</span></article></section><section class="panel table-panel">${panelHeader('Itens que precisam de atenção', 'Acompanhe o ponto de reposição antes de faltar na oficina.', '<button class="text-link" data-action="show-toast">Ver catálogo completo →</button>')}<div class="table-wrap"><table><thead><tr><th>Peça / código</th><th>Disponível</th><th>Mínimo</th><th>Preço unitário</th><th>Situação</th><th></th></tr></thead><tbody>${state.inventory.map((item) => `<tr><td><div class="cell-primary"><span class="vehicle-symbol">${icon('box')}</span><div>${esc(item.name)}<span class="cell-secondary">${esc(item.code)}</span></div></div></td><td><strong style="color:${item.stock <= item.min ? 'var(--red)' : 'var(--slate-300)'}">${item.stock} ${item.unit}</strong></td><td>${item.min} ${item.unit}</td><td>${money(item.price)}</td><td>${item.stock <= item.min ? statusPill('late', 'Reposição necessária') : statusPill('done', 'Normal')}</td><td><button class="action-dots" data-action="show-toast">•••</button></td></tr>`).join('')}</tbody></table></div></section>`;
+  const categories = [...new Set(state.inventory.map((item) => item.category))];
+  const filtered = state.inventory.filter((item) => { const low = item.stock <= item.min; return matches(item) && (state.inventoryCategory === 'all' || item.category === state.inventoryCategory) && (state.inventoryStatus === 'all' || (state.inventoryStatus === 'low' ? low : !low)); });
+  const lowStock = state.inventory.filter((item) => item.stock <= item.min).length;
+  const totalUnits = state.inventory.reduce((sum, item) => sum + item.stock, 0);
+  const totalValue = state.inventory.reduce((sum, item) => sum + item.stock * item.cost, 0);
+  return `${pageHeader('Operação', 'Estoque e peças', 'Controle completo de cadastro, inventário, movimentações e reposição.', '<button class="button button-ghost" data-action="inventory-report">'+icon('chart')+' Relatório</button><button class="button button-primary" data-action="new-stock">'+icon('plus')+' Cadastrar item</button>')}<section class="kpi-grid"><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon amber">${icon('alert')}</span><span class="kpi-change down">atenção</span></div><strong class="kpi-value">${String(lowStock).padStart(2, '0')}</strong><span class="kpi-label">Itens abaixo do mínimo</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon cyan">${icon('box')}</span><span class="kpi-change">+18 hoje</span></div><strong class="kpi-value">${totalUnits}</strong><span class="kpi-label">Unidades em estoque</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon green">${icon('trend')}</span><span class="kpi-change">custo atual</span></div><strong class="kpi-value">${money(totalValue)}</strong><span class="kpi-label">Valor de custo armazenado</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon orange">${icon('receipt')}</span><span class="kpi-change">este mês</span></div><strong class="kpi-value">R$ 8,6k</strong><span class="kpi-label">Consumo em ordens</span></article></section><section class="filter-bar"><div class="filter-group"><span class="filter-label">Categoria:</span><select class="select-control" id="inventory-category"><option value="all">Todas as categorias</option>${categories.map((category) => `<option value="${esc(category)}" ${state.inventoryCategory === category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select><span class="filter-label">Situação:</span><select class="select-control" id="inventory-status"><option value="all" ${state.inventoryStatus === 'all' ? 'selected' : ''}>Todos</option><option value="low" ${state.inventoryStatus === 'low' ? 'selected' : ''}>Reposição necessária</option><option value="normal" ${state.inventoryStatus === 'normal' ? 'selected' : ''}>Estoque normal</option></select></div><span class="filter-label">${filtered.length} itens exibidos • ${state.units.length} unidades disponíveis</span></section><section class="panel table-panel" style="margin-top:0">${panelHeader('Inventário de peças e materiais', 'Controle por unidade, localização, estoque mínimo e máximo.', '<button class="text-link" data-action="inventory-adjust">Ajustar inventário →</button>')}<div class="table-wrap"><table><thead><tr><th>Item / código</th><th>Categoria</th><th>Saldo</th><th>Unidade</th><th>Localização</th><th>Reposição</th><th>Custo unit.</th><th>Situação</th><th></th></tr></thead><tbody>${filtered.length ? filtered.map((item) => `<tr><td><div class="cell-primary"><span class="vehicle-symbol">${icon('box')}</span><div>${esc(item.name)}<span class="cell-secondary">${esc(item.code)} • ${esc(item.supplier)}</span></div></div></td><td>${esc(item.category)}</td><td><strong style="color:${item.stock <= item.min ? 'var(--red)' : 'var(--slate-300)'}">${item.stock}</strong><span class="cell-secondary">máx. ${item.max}</span></td><td><span class="permission-chip">${esc(item.unit)}</span></td><td>${esc(item.location)}</td><td>${item.min} ${esc(item.unit)}</td><td>${money(item.cost)}</td><td>${item.stock <= item.min ? statusPill('late', 'Repor') : statusPill('done', 'Normal')}</td><td><button class="action-dots" data-action="show-toast">•••</button></td></tr>`).join('') : `<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">${icon('search')}</div><h3>Nenhum item encontrado</h3><p>Ajuste os filtros ou cadastre uma nova peça.</p></div></td></tr>`}</tbody></table></div></section><section class="dashboard-grid"><article class="panel">${panelHeader('Unidades cadastradas', 'Use a unidade correta para cada tipo de material.', '<button class="text-link" data-action="new-unit">Cadastrar unidade →</button>')}<div class="permission-list">${state.units.map((unit) => `<span class="permission-chip">${esc(unit)}</span>`).join('')}</div></article><article class="panel">${panelHeader('Resumo de movimentações', 'Últimas entradas e saídas registradas.')}<div class="timeline"><div class="timeline-item"><span class="timeline-time">Hoje</span><i class="timeline-marker"></i><div class="timeline-copy"><strong>Entrada • Óleo 5W30</strong><span>+20 un. • NF 003842 • LubriMax</span></div></div><div class="timeline-item"><span class="timeline-time">Ontem</span><i class="timeline-marker"></i><div class="timeline-copy"><strong>Saída • Filtro de óleo</strong><span>-4 pc • OS-0248 • Toyota Corolla</span></div></div></div></article></section>`;
 }
 
 function renderServices() { return `${pageHeader('Operação', 'Serviços e preços', 'Catálogo padronizado para orçamentos mais rápidos.', '<button class="button button-primary" data-action="show-toast">'+icon('plus')+' Novo serviço</button>')}<section class="module-grid"><article class="module-card"><span class="module-icon orange">${icon('wrench')}</span><h3>Troca de óleo e filtros</h3><p>Serviço rápido com kit de óleo, filtro e checklist.</p><div class="metric-inline"><b>R$ 249</b><span>a partir de</span></div></article><article class="module-card"><span class="module-icon cyan">${icon('car')}</span><h3>Revisão preventiva</h3><p>Inspeção de 30 itens e relatório do estado do veículo.</p><div class="metric-inline"><b>R$ 480</b><span>a partir de</span></div></article><article class="module-card"><span class="module-icon amber">${icon('settings')}</span><h3>Freios e suspensão</h3><p>Diagnóstico, substituição de componentes e teste final.</p><div class="metric-inline"><b>R$ 320</b><span>a partir de</span></div></article><article class="module-card"><span class="module-icon green">${icon('scan')}</span><h3>Diagnóstico eletrônico</h3><p>Leitura de falhas, análise de parâmetros e laudo técnico.</p><div class="metric-inline"><b>R$ 180</b><span>a partir de</span></div></article></section>`; }
@@ -182,6 +192,16 @@ function openUserModal() {
   renderIcons();
 }
 function closeUserModal() { const modal = document.getElementById('user-modal-backdrop'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }
+function openStockModal() {
+  document.getElementById('stock-unit-select').innerHTML = state.units.map((unit) => `<option value="${esc(unit)}">${esc(unit)}</option>`).join('');
+  const modal = document.getElementById('stock-modal-backdrop');
+  modal.classList.add('is-open');
+  modal.setAttribute('aria-hidden', 'false');
+  setTimeout(() => modal.querySelector('input[name="name"]')?.focus(), 50);
+}
+function closeStockModal() { const modal = document.getElementById('stock-modal-backdrop'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }
+function registerUnit() { const unit = window.prompt('Informe a nova unidade. Ex.: lata, tubo ou frasco'); if (!unit) return; const normalized = unit.trim().toLowerCase(); if (!normalized || state.units.includes(normalized)) { showToast('Essa unidade já está cadastrada ou é inválida.', 'error'); return; } state.units.push(normalized); renderView(); showToast(`Unidade ${normalized} adicionada ao catálogo.`); }
+function adjustInventory() { const code = window.prompt('Digite o código do item para ajustar o saldo'); if (!code) return; const item = state.inventory.find((entry) => entry.code.toLowerCase() === code.trim().toLowerCase()); if (!item) { showToast('Item não encontrado no inventário.', 'error'); return; } const quantity = window.prompt(`Novo saldo para ${item.name} (${item.unit})`, String(item.stock)); if (quantity === null || Number.isNaN(Number(quantity)) || Number(quantity) < 0) { showToast('Saldo inválido para o ajuste.', 'error'); return; } item.stock = Number(quantity); renderView(); showToast(`Inventário ajustado: ${item.name}.`); }
 function syncPermissionSelection() {
   const role = document.getElementById('user-role').value;
   const isAdmin = role === 'admin';
@@ -196,6 +216,10 @@ function bindEvents() {
     if (nav) { if (!canAccess(nav.dataset.view)) { showToast('Seu login não possui acesso a este módulo.', 'error'); return; } state.view = nav.dataset.view; state.status = 'all'; renderView(); return; }
     if (event.target.closest('[data-action="new-order"]')) { openModal(); return; }
     if (event.target.closest('[data-action="new-user"]')) { openUserModal(); return; }
+    if (event.target.closest('[data-action="new-stock"]')) { openStockModal(); return; }
+    if (event.target.closest('[data-action="inventory-report"]')) { showToast('Relatório de estoque preparado para exportação local em PDF/CSV.'); return; }
+    if (event.target.closest('[data-action="inventory-adjust"]')) { adjustInventory(); return; }
+    if (event.target.closest('[data-action="new-unit"]')) { registerUnit(); return; }
     if (event.target.closest('[data-action="logout"]')) { logout(); return; }
     if (event.target.closest('[data-action="new-client"]')) { showToast('Cadastro de cliente será conectado ao SQLite na próxima etapa.'); return; }
     if (event.target.closest('[data-action="backup"]')) { showToast('Backup demonstrativo criado localmente.'); return; }
@@ -204,6 +228,7 @@ function bindEvents() {
     if (orderAction) { completeOrder(orderAction.dataset.orderId); return; }
     if (event.target.closest('[data-close-modal]') || event.target.id === 'modal-backdrop') closeModal();
     if (event.target.closest('[data-close-user-modal]') || event.target.id === 'user-modal-backdrop') closeUserModal();
+    if (event.target.closest('[data-close-stock-modal]') || event.target.id === 'stock-modal-backdrop') closeStockModal();
   });
   document.getElementById('login-form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -214,6 +239,10 @@ function bindEvents() {
   });
   document.getElementById('global-search').addEventListener('input', (event) => { state.search = event.target.value; renderView(); });
   document.addEventListener('change', (event) => { if (event.target.id === 'status-filter') { state.status = event.target.value; renderView(); } });
+  document.addEventListener('change', (event) => {
+    if (event.target.id === 'inventory-category') { state.inventoryCategory = event.target.value; renderView(); }
+    if (event.target.id === 'inventory-status') { state.inventoryStatus = event.target.value; renderView(); }
+  });
   document.addEventListener('change', (event) => {
     if (event.target.id === 'user-role') syncPermissionSelection();
     if (event.target.id === 'select-all-permissions') document.querySelectorAll('#permission-grid input[name="permission"]').forEach((input) => { input.checked = event.target.checked; });
@@ -229,6 +258,14 @@ function bindEvents() {
     const permissions = admin ? ['all'] : [...document.querySelectorAll('#permission-grid input[name="permission"]:checked')].map((input) => input.value);
     state.users.push({ id: state.users.length + 1, name: data.get('name'), login: loginValue, password: data.get('password'), role: roleNames[role], admin, permissions });
     event.target.reset(); closeUserModal(); renderView(); showToast(`Login de ${String(data.get('name')).split(' ')[0]} criado com sucesso.`);
+  });
+  document.getElementById('new-stock-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    const code = String(data.get('code')).trim().toUpperCase();
+    if (state.inventory.some((item) => item.code.toUpperCase() === code)) { showToast('Este código de item já está cadastrado.', 'error'); return; }
+    state.inventory.push({ name: data.get('name'), code, category: data.get('category'), stock: Number(data.get('stock')), min: Number(data.get('min')), max: Number(data.get('max')), unit: data.get('unit'), price: Number(data.get('price')), cost: Number(data.get('cost')), location: data.get('location'), supplier: data.get('supplier') || 'Não informado' });
+    event.target.reset(); closeStockModal(); state.view = 'inventory'; renderView(); showToast('Item cadastrado no estoque local.');
   });
   document.getElementById('new-order-form').addEventListener('submit', (event) => {
     event.preventDefault();
