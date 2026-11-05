@@ -2,7 +2,7 @@
   "routes": [
     {
       "path": "/",
-      "title": "AutoCar Oficina Offline"
+      "title": "AutoCar Sistema Integrado"
     }
   ]
 }

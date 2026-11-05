@@ -1,4 +1,4 @@
-# AutoCar Oficina Offline — resultados do protótipo
+# AutoCar Sistema Integrado — resultados do protótipo
 
 ## Dashboard com design system da referência
 

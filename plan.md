@@ -1,4 +1,4 @@
-# AutoCar Oficina Offline — plano do protótipo
+# AutoCar Sistema Integrado — plano do protótipo
 
 ## Direção aprovada
 
