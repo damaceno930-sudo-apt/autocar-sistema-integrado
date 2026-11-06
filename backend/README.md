@@ -43,9 +43,11 @@ O módulo financeiro exige administrador ou usuário com a permissão `finance`:
 - `POST /api/finance/cash/open`: abrir caixa;
 - `POST /api/finance/cash/movement`: registrar entrada, saída, sangria ou suprimento;
 - `POST /api/finance/cash/close`: fechar caixa com saldo contado;
-- `POST /api/finance/sales`: registrar venda, receita pendente, conta a receber e comissão.
+- `POST /api/finance/sales`: registrar venda, receita pendente, parcelas, conta a receber e comissão;
+- `GET/POST /api/finance/categories`: consultar e cadastrar categorias de receita/despesa;
+- `DELETE /api/finance/transactions/{id}`: cancelar logicamente um lançamento, mantendo auditoria.
 
-Todas as operações financeiras importantes geram auditoria no SQLite. O frontend usa esses endpoints na aba Financeiro e na finalização de venda direta.
+Baixas exigem caixa aberto e criam automaticamente uma movimentação de entrada ou saída vinculada à conta. Todas as operações financeiras importantes geram auditoria no SQLite. O frontend usa esses endpoints na aba Financeiro e na finalização de venda direta, incluindo forma de pagamento e quantidade de parcelas.
 
 ## Backend nativo para instaladores
 

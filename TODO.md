@@ -19,8 +19,10 @@
 - [x] Implementar contas a receber e a pagar com cadastro, vencimento, status, baixa parcial/total e auditoria.
 - [x] Implementar caixa com abertura, saldo inicial, entradas, saídas, sangria, suprimento, fechamento e saldo contado.
 - [x] Integrar venda direta ao financeiro, criando receita, conta a receber para saldo pendente e comissão do vendedor.
-- [ ] Integrar baixa de contas automaticamente ao movimento do caixa, implementar cancelamento/reversão e formas de pagamento por parcela.
-- [ ] Criar CRUD de categorias financeiras e relatórios/exportações financeiras baseados nas consultas SQLite.
+- [x] Integrar baixa de contas automaticamente ao movimento do caixa aberto, com entrada para recebimentos e saída para pagamentos.
+- [x] Implementar cancelamento lógico auditado de lançamentos e formas de pagamento com parcelamento nas vendas.
+- [x] Criar CRUD inicial de categorias financeiras persistentes.
+- [ ] Gerar contas a pagar a partir das compras e da importação XML, implementar reversão completa de vendas canceladas e relatórios/exportações financeiras.
 - [x] Persistir em SQLite, via API local, empresa, usuários, permissões, clientes, veículos, estoque, serviços, fornecedores e ordens de serviço, com hidratação do frontend e auditoria.
 - [x] O cadastro de produtos aceita foto local opcional e o catálogo exibe a miniatura sem depender da Internet.
 

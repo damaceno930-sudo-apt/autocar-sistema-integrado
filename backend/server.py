@@ -167,7 +167,8 @@ class Database:
                 CREATE TABLE IF NOT EXISTS accounts_receivable (
                     id TEXT PRIMARY KEY, origin TEXT, customer TEXT, client_id INTEGER, description TEXT NOT NULL,
                     amount REAL NOT NULL, due_date TEXT NOT NULL, payment_method TEXT, status TEXT NOT NULL DEFAULT 'pending',
-                    paid_amount REAL DEFAULT 0, paid_at TEXT, sale_id TEXT, order_id TEXT, created_by INTEGER, created_at TEXT NOT NULL
+                    paid_amount REAL DEFAULT 0, paid_at TEXT, sale_id TEXT, order_id TEXT, created_by INTEGER, created_at TEXT NOT NULL,
+                    installment_number INTEGER DEFAULT 1, total_installments INTEGER DEFAULT 1
                 );
                 CREATE TABLE IF NOT EXISTS accounts_payable (
                     id TEXT PRIMARY KEY, supplier TEXT, supplier_id INTEGER, description TEXT NOT NULL,
@@ -179,8 +180,17 @@ class Database:
                     rate REAL NOT NULL DEFAULT 3, amount REAL NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
                     paid_at TEXT, created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS finance_categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, kind TEXT NOT NULL,
+                    active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
             """)
+            for column, definition in (("installment_number", "INTEGER DEFAULT 1"), ("total_installments", "INTEGER DEFAULT 1")):
+                try:
+                    self.conn.execute(f"ALTER TABLE accounts_receivable ADD COLUMN {column} {definition}")
+                except sqlite3.OperationalError:
+                    pass
             if not self.conn.execute("SELECT 1 FROM migrations WHERE version=1").fetchone():
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(1, ?)", (now_iso(),))
                 self.seed()
@@ -190,6 +200,10 @@ class Database:
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(2, ?)", (now_iso(),))
             if not self.conn.execute("SELECT 1 FROM migrations WHERE version=3").fetchone():
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(3, ?)", (now_iso(),))
+            if not self.conn.execute("SELECT 1 FROM migrations WHERE version=4").fetchone():
+                for name, kind in (("Venda", "income"), ("Serviços", "income"), ("Peças", "income"), ("Compras", "expense"), ("Despesas fixas", "expense"), ("Impostos", "expense"), ("Folha", "expense")):
+                    self.conn.execute("INSERT OR IGNORE INTO finance_categories(name,kind,created_at) VALUES(?,?,?)", (name, kind, now_iso()))
+                self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(4, ?)", (now_iso(),))
 
     def seed(self):
         stamp = now_iso()
@@ -252,8 +266,18 @@ class Database:
             "receivables": [self.row_dict(row) for row in self.conn.execute("SELECT * FROM accounts_receivable ORDER BY due_date, created_at DESC LIMIT ?", (limit,))],
             "payables": [self.row_dict(row) for row in self.conn.execute("SELECT * FROM accounts_payable ORDER BY due_date, created_at DESC LIMIT ?", (limit,))],
             "movements": [self.row_dict(row) for row in self.conn.execute("SELECT m.*, r.opened_at FROM cash_movements m JOIN cash_registers r ON r.id=m.register_id ORDER BY m.created_at DESC LIMIT ?", (limit,))],
-            "commissions": [self.row_dict(row) for row in self.conn.execute("SELECT c.*, u.name AS seller_name FROM commissions c LEFT JOIN users u ON u.id=c.seller_id ORDER BY c.created_at DESC LIMIT ?", (limit,))]
+            "commissions": [self.row_dict(row) for row in self.conn.execute("SELECT c.*, u.name AS seller_name FROM commissions c LEFT JOIN users u ON u.id=c.seller_id ORDER BY c.created_at DESC LIMIT ?", (limit,))],
+            "categories": [self.row_dict(row) for row in self.conn.execute("SELECT * FROM finance_categories WHERE active=1 ORDER BY kind,name")]
         }
+
+    def finance_create_category(self, data, actor):
+        name = str(data.get("name", "")).strip()
+        kind = str(data.get("kind", "expense"))
+        if not name or kind not in ("income", "expense"): raise ValueError("categoria inválida")
+        with self.conn:
+            cur = self.conn.execute("INSERT INTO finance_categories(name,kind,created_at) VALUES(?,?,?)", (name, kind, now_iso()))
+            self.audit(actor["id"], "create", "finance_category", str(cur.lastrowid))
+        return self.row_dict(self.conn.execute("SELECT * FROM finance_categories WHERE id=?", (cur.lastrowid,)).fetchone())
 
     def finance_create_transaction(self, data, actor):
         kind = str(data.get("kind", "expense"))
@@ -298,7 +322,13 @@ class Database:
             status = "paid" if received >= total else "pending"
             self.conn.execute("INSERT INTO finance_transactions(id,kind,category,description,amount,status,paid_date,sale_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)", (f"fin-{sale_id}", "income", "Venda", data.get("description", "Venda de produtos e serviços"), total, status, stamp if status == "paid" else None, sale_id, stamp))
             if received < total:
-                self.conn.execute("INSERT INTO accounts_receivable(id,origin,customer,client_id,description,amount,due_date,payment_method,status,sale_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (f"rec-{sale_id}", "Venda", data.get("customer"), data.get("clientId"), data.get("description", "Venda parcelada"), round(total - received, 2), data.get("dueDate", stamp[:10]), data.get("paymentMethod"), "pending", sale_id, actor["id"], stamp))
+                installments = max(1, int(data.get("installments", 1) or 1))
+                balance = round(total - received, 2)
+                installment_amount = round(balance / installments, 2)
+                for installment in range(1, installments + 1):
+                    amount = installment_amount if installment < installments else round(balance - installment_amount * (installments - 1), 2)
+                    due_date = data.get("dueDate", stamp[:10])
+                    self.conn.execute("INSERT INTO accounts_receivable(id,origin,customer,client_id,description,amount,due_date,payment_method,status,sale_id,created_by,created_at,installment_number,total_installments) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (f"rec-{sale_id}-{installment}", "Venda", data.get("customer"), data.get("clientId"), f"{data.get('description', 'Venda parcelada')} • parcela {installment}/{installments}", amount, due_date, data.get("paymentMethod"), "pending", sale_id, actor["id"], stamp, installment, installments))
             if data.get("sellerId") and commission_amount > 0:
                 self.conn.execute("INSERT INTO commissions(id,sale_id,seller_id,base_amount,rate,amount,status,created_at) VALUES(?,?,?,?,?,?,?,?)", (f"com-{sale_id}", sale_id, data["sellerId"], total, commission_rate, commission_amount, "pending", stamp))
             self.audit(actor["id"], "create", "sale", sale_id)
@@ -341,11 +371,24 @@ class Database:
         if not row: raise ValueError("conta não encontrada")
         amount = float(data.get("paidAmount", row["amount"]) or 0)
         if amount <= 0 or amount > row["amount"]: raise ValueError("valor de baixa inválido")
+        register = self.conn.execute("SELECT * FROM cash_registers WHERE status='open' ORDER BY id DESC LIMIT 1").fetchone()
+        if not register: raise ValueError("abra o caixa antes de baixar uma conta")
         status = "paid" if amount >= row["amount"] else "partial"
         with self.conn:
             self.conn.execute(f"UPDATE {table} SET paid_amount=?,paid_at=?,status=? WHERE id=?", (amount, now_iso(), status, account_id))
+            movement_kind = "entry" if table == "accounts_receivable" else "expense"
+            self.conn.execute("INSERT INTO cash_movements(id,register_id,kind,description,amount,payment_method,reference_type,reference_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (f"mov-{secrets.token_hex(8)}", register["id"], movement_kind, f"Baixa {account_id} • {row['description']}", amount, data.get("paymentMethod") or row["payment_method"], table, account_id, actor["id"], now_iso()))
             self.audit(actor["id"], "settle", table, account_id)
         return self.row_dict(self.conn.execute(f"SELECT * FROM {table} WHERE id=?", (account_id,)).fetchone())
+
+    def finance_cancel_transaction(self, transaction_id, actor):
+        row = self.conn.execute("SELECT * FROM finance_transactions WHERE id=?", (transaction_id,)).fetchone()
+        if not row: raise ValueError("lançamento não encontrado")
+        if row["status"] == "cancelled": return self.row_dict(row)
+        with self.conn:
+            self.conn.execute("UPDATE finance_transactions SET status='cancelled' WHERE id=?", (transaction_id,))
+            self.audit(actor["id"], "cancel", "finance_transaction", transaction_id)
+        return self.row_dict(self.conn.execute("SELECT * FROM finance_transactions WHERE id=?", (transaction_id,)).fetchone())
 
     def sync_relational(self, snapshot: dict, stamp: str | None = None):
         stamp = stamp or now_iso()
@@ -526,7 +569,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
-            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 3})
+            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 4})
             return
         if parsed.path == "/api/state":
             user = self.require_user()
@@ -555,6 +598,10 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/finance/commissions":
             user = self.require_finance()
             if user: self.send_json(200, {"items": DB.finance_lists()["commissions"]})
+            return
+        if parsed.path == "/api/finance/categories":
+            user = self.require_finance()
+            if user: self.send_json(200, {"items": DB.finance_lists()["categories"]})
             return
         if parsed.path == "/api/backup/sqlite":
             user = self.require_user()
@@ -599,6 +646,10 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/finance/sales":
                 user = self.require_finance_or_sales()
                 if user: self.send_json(201, {"item": DB.finance_record_sale(data, user), "summary": DB.finance_summary()})
+                return
+            if parsed.path == "/api/finance/categories":
+                user = self.require_finance()
+                if user: self.send_json(201, {"item": DB.finance_create_category(data, user), "categories": DB.finance_lists()["categories"]})
                 return
             if parsed.path == "/api/finance/receivables":
                 user = self.require_finance()
@@ -662,6 +713,21 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, {"ok": True, "state": DB.snapshot(user)})
         except Exception as exc:
             self.send_json(400, {"error": "bad_request", "message": str(exc)})
+
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/finance/transactions/"):
+            user = self.require_finance()
+            if not user: return
+            try:
+                transaction_id = parsed.path.rstrip("/").split("/")[-1]
+                item = DB.finance_cancel_transaction(transaction_id, user)
+                self.send_json(200, {"item": item, "summary": DB.finance_summary()})
+            except Exception as exc:
+                self.send_json(400, {"error": "bad_request", "message": str(exc)})
+            return
+        self.send_json(404, {"error": "not_found"})
 
 
 def run():
