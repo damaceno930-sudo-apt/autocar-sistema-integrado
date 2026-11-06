@@ -146,7 +146,13 @@ class Database:
                 CREATE TABLE IF NOT EXISTS sales (
                     id TEXT PRIMARY KEY, sale_type TEXT, client_id INTEGER, total REAL DEFAULT 0,
                     discount REAL DEFAULT 0, received REAL DEFAULT 0, change_value REAL DEFAULT 0,
-                    seller_id INTEGER, mechanic_id INTEGER, created_at TEXT
+                    seller_id INTEGER, mechanic_id INTEGER, status TEXT NOT NULL DEFAULT 'completed', cancelled_at TEXT, cancel_reason TEXT, created_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS sale_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id TEXT NOT NULL, item_kind TEXT NOT NULL,
+                    item_code TEXT, description TEXT NOT NULL, quantity REAL NOT NULL, unit_price REAL NOT NULL,
+                    unit_cost REAL DEFAULT 0, total REAL NOT NULL, reversed_at TEXT,
+                    FOREIGN KEY(sale_id) REFERENCES sales(id) ON DELETE CASCADE
                 );
                 CREATE TABLE IF NOT EXISTS finance_transactions (
                     id TEXT PRIMARY KEY, kind TEXT, category TEXT, description TEXT, amount REAL DEFAULT 0,
@@ -199,6 +205,11 @@ class Database:
                 self.conn.execute("ALTER TABLE accounts_payable ADD COLUMN purchase_id TEXT")
             except sqlite3.OperationalError:
                 pass
+            for column, definition in (("status", "TEXT NOT NULL DEFAULT 'completed'"), ("cancelled_at", "TEXT"), ("cancel_reason", "TEXT")):
+                try:
+                    self.conn.execute(f"ALTER TABLE sales ADD COLUMN {column} {definition}")
+                except sqlite3.OperationalError:
+                    pass
             if not self.conn.execute("SELECT 1 FROM migrations WHERE version=1").fetchone():
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(1, ?)", (now_iso(),))
                 self.seed()
@@ -214,6 +225,8 @@ class Database:
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(4, ?)", (now_iso(),))
             if not self.conn.execute("SELECT 1 FROM migrations WHERE version=5").fetchone():
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(5, ?)", (now_iso(),))
+            if not self.conn.execute("SELECT 1 FROM migrations WHERE version=6").fetchone():
+                self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(6, ?)", (now_iso(),))
 
     def seed(self):
         stamp = now_iso()
@@ -362,6 +375,21 @@ class Database:
         commission_amount = round(total * commission_rate / 100, 2)
         with self.conn:
             self.conn.execute("INSERT INTO sales(id,sale_type,client_id,total,discount,received,change_value,seller_id,mechanic_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (sale_id, data.get("saleType", "direct"), data.get("clientId"), total, data.get("discount", 0), received, max(0, received - total), data.get("sellerId", actor["id"]), data.get("mechanicId"), stamp))
+            for item in data.get("items", []):
+                quantity = float(item.get("quantity", 0) or 0)
+                unit_price = float(item.get("price", 0) or 0)
+                discount = float(item.get("discount", 0) or 0)
+                item_total = round(max(0, unit_price - discount) * quantity, 2)
+                item_kind = str(item.get("kind", "service"))
+                code = str(item.get("code", "")).strip().upper() or None
+                unit_cost = 0
+                if item_kind == "product":
+                    stock = self.conn.execute("SELECT stock,cost FROM stock_items WHERE code=?", (code,)).fetchone()
+                    if not stock: raise ValueError(f"produto {code} não encontrado no estoque")
+                    if stock["stock"] < quantity: raise ValueError(f"estoque insuficiente para {code}")
+                    unit_cost = stock["cost"] or 0
+                    self.conn.execute("UPDATE stock_items SET stock=stock-? WHERE code=?", (quantity, code))
+                self.conn.execute("INSERT INTO sale_items(sale_id,item_kind,item_code,description,quantity,unit_price,unit_cost,total) VALUES(?,?,?,?,?,?,?,?)", (sale_id, item_kind, code, item.get("name", "Item da venda"), quantity, unit_price, unit_cost, item_total))
             status = "paid" if received >= total else "pending"
             self.conn.execute("INSERT INTO finance_transactions(id,kind,category,description,amount,status,paid_date,sale_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)", (f"fin-{sale_id}", "income", "Venda", data.get("description", "Venda de produtos e serviços"), total, status, stamp if status == "paid" else None, sale_id, stamp))
             if received < total:
@@ -432,6 +460,32 @@ class Database:
             self.conn.execute("UPDATE finance_transactions SET status='cancelled' WHERE id=?", (transaction_id,))
             self.audit(actor["id"], "cancel", "finance_transaction", transaction_id)
         return self.row_dict(self.conn.execute("SELECT * FROM finance_transactions WHERE id=?", (transaction_id,)).fetchone())
+
+    def cancel_sale(self, sale_id, data, actor):
+        sale = self.conn.execute("SELECT * FROM sales WHERE id=?", (sale_id,)).fetchone()
+        if not sale: raise ValueError("venda não encontrada")
+        if sale["status"] == "cancelled": return {"sale": self.row_dict(sale), "refund": 0, "alreadyCancelled": True}
+        receivables = self.conn.execute("SELECT * FROM accounts_receivable WHERE sale_id=? AND status != 'cancelled'", (sale_id,)).fetchall()
+        receivable_paid = sum(float(row["paid_amount"] or 0) for row in receivables)
+        refund = round(float(sale["received"] or 0) + receivable_paid, 2)
+        register = self.conn.execute("SELECT * FROM cash_registers WHERE status='open' ORDER BY id DESC LIMIT 1").fetchone()
+        if refund > 0 and not register: raise ValueError("abra o caixa para registrar o estorno financeiro")
+        reason = str(data.get("reason", "Cancelamento solicitado"))[:500]
+        stamp = now_iso()
+        items = self.conn.execute("SELECT * FROM sale_items WHERE sale_id=? AND reversed_at IS NULL", (sale_id,)).fetchall()
+        with self.conn:
+            for item in items:
+                if item["item_kind"] == "product" and item["item_code"]:
+                    self.conn.execute("UPDATE stock_items SET stock=stock+? WHERE code=?", (item["quantity"], item["item_code"]))
+                self.conn.execute("UPDATE sale_items SET reversed_at=? WHERE id=?", (stamp, item["id"]))
+            self.conn.execute("UPDATE sales SET status='cancelled',cancelled_at=?,cancel_reason=? WHERE id=?", (stamp, reason, sale_id))
+            self.conn.execute("UPDATE finance_transactions SET status='cancelled' WHERE sale_id=?", (sale_id,))
+            self.conn.execute("UPDATE accounts_receivable SET status='cancelled',paid_at=COALESCE(paid_at,?) WHERE sale_id=? AND status != 'cancelled'", (stamp, sale_id))
+            self.conn.execute("UPDATE commissions SET status='cancelled' WHERE sale_id=? AND status != 'paid'", (sale_id,))
+            if refund > 0:
+                self.conn.execute("INSERT INTO cash_movements(id,register_id,kind,description,amount,payment_method,reference_type,reference_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (f"mov-{secrets.token_hex(8)}", register["id"], "expense", f"Estorno da venda {sale_id}", refund, data.get("paymentMethod") or "Estorno", "sale_reversal", sale_id, actor["id"], stamp))
+            self.audit(actor["id"], "cancel", "sale", f"{sale_id} • {reason} • estorno {refund:.2f}")
+        return {"sale": self.row_dict(self.conn.execute("SELECT * FROM sales WHERE id=?", (sale_id,)).fetchone()), "refund": refund, "restoredItems": len(items)}
 
     def sync_relational(self, snapshot: dict, stamp: str | None = None):
         stamp = stamp or now_iso()
@@ -620,7 +674,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
-            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 5})
+            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 6})
             return
         if parsed.path == "/api/state":
             user = self.require_user()
@@ -693,6 +747,12 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/finance/transactions":
                 user = self.require_finance()
                 if user: self.send_json(201, {"item": DB.finance_create_transaction(data, user), "summary": DB.finance_summary()})
+                return
+            if parsed.path.startswith("/api/finance/sales/") and parsed.path.endswith("/cancel"):
+                user = self.require_finance()
+                if user:
+                    sale_id = parsed.path.rstrip("/").split("/")[-2]
+                    self.send_json(200, {**DB.cancel_sale(sale_id, data, user), "summary": DB.finance_summary()})
                 return
             if parsed.path == "/api/finance/sales":
                 user = self.require_finance_or_sales()

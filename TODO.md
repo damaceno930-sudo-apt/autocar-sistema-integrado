@@ -24,7 +24,9 @@
 - [x] Criar CRUD inicial de categorias financeiras persistentes.
 - [x] Gerar conta a pagar automaticamente a partir de entrada manual de estoque e importação XML/NF-e, vinculando fornecedor, documento, vencimento e forma de pagamento.
 - [x] Impedir a importação duplicada da mesma NF/documento de compra.
-- [ ] Implementar reversão completa de vendas canceladas e relatórios/exportações financeiras.
+- [x] Persistir itens vendidos, baixar produtos do estoque e implementar reversão completa de vendas canceladas.
+- [x] Na reversão, devolver produtos ao estoque, cancelar parcelas e comissão, cancelar o lançamento financeiro e registrar estorno dos valores recebidos no caixa aberto.
+- [ ] Implementar relatórios/exportações financeiras.
 - [x] Persistir em SQLite, via API local, empresa, usuários, permissões, clientes, veículos, estoque, serviços, fornecedores e ordens de serviço, com hidratação do frontend e auditoria.
 - [x] O cadastro de produtos aceita foto local opcional e o catálogo exibe a miniatura sem depender da Internet.
 
