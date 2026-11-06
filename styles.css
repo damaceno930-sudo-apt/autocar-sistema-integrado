@@ -442,3 +442,5 @@ form { padding: 20px 24px 24px; }
 .report-card p { margin: 6px 0 13px; color: var(--slate-500); font-size: 9px; }
 .supplier-panel { margin-top: 17px; }
 @media (max-width: 900px) { .report-grid { grid-template-columns: 1fr; } .sale-actions { flex-direction: column; } }
+
+.catalog-product-photo { width: 38px; height: 38px; flex: 0 0 38px; object-fit: cover; border: 1px solid var(--line-bright); border-radius: 10px; background: var(--navy-800); }
