@@ -71,3 +71,7 @@ A configuração terá o cadastro da prestadora com razão social, nome fantasia
 ## Importação, exportação e limpeza
 
 A central de dados terá ações para importar e exportar SQLite, CSV e JSON. O botão de limpeza exigirá confirmação, removerá os dados operacionais e usuários não administradores, preservando o acesso administrador para iniciar um novo cadastro.
+
+## Impressão de OS e PDF
+
+Cada OS terá uma impressão customizada em folha A4, com identidade AutoCar, cabeçalho da empresa cadastrada, número da OS, cliente, veículo, placa, mecânico responsável, status, previsão, serviços, valor total, observações e assinaturas. O navegador usará a impressão nativa para permitir salvar o documento como PDF, sem Internet ou dependências externas.

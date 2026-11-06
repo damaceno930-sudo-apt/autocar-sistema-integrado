@@ -41,3 +41,12 @@
 - [x] Existe seleção de arquivo para importação de SQLite, CSV ou JSON.
 - [x] Existe botão de limpeza completa protegido por confirmação, preservando o administrador para um novo cadastro.
 - [ ] Na próxima etapa, conectar importação/exportação binária SQLite real ao backend Python e validar migrações.
+
+## Impressão personalizada de OS
+
+- [x] Cada OS possui botão próprio para impressão.
+- [x] O documento imprimível usa layout A4 customizado com identidade do sistema.
+- [x] O cabeçalho usa os dados cadastrados da empresa prestadora.
+- [x] A OS impressa apresenta cliente, veículo, placa, mecânico, status, previsão, serviço, valor total, observações e assinaturas.
+- [x] A impressão funciona offline pela janela nativa do navegador e permite salvar como PDF.
+- [ ] Na próxima etapa, conectar a geração direta de arquivo PDF no backend para exportação sem a caixa de impressão do sistema.
