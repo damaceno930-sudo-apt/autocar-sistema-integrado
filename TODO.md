@@ -15,7 +15,8 @@
 - [x] Funcionários com níveis de acesso por módulo.
 - [x] Importação local de XML de NF-e com leitura de código, descrição, quantidade, unidade e preço para entrada no inventário.
 - [x] Relatórios de vendas por período, serviços prestados, curva ABC, fluxo de caixa, estoque e aniversariantes.
-- [ ] Persistir no backend SQLite os lançamentos financeiros, comissões, vendas diretas e fornecedores; nesta versão os dados continuam em memória no protótipo offline.
+- [ ] Persistir no backend SQLite os lançamentos financeiros, comissões e vendas diretas com CRUD dedicado; o schema relacional já contém as tabelas `finance_transactions` e `sales`, enquanto a interface financeira atual ainda usa dados demonstrativos.
+- [x] Persistir em SQLite, via API local, empresa, usuários, permissões, clientes, veículos, estoque, serviços, fornecedores e ordens de serviço, com hidratação do frontend e auditoria.
 - [x] O cadastro de produtos aceita foto local opcional e o catálogo exibe a miniatura sem depender da Internet.
 
 ## Empacotamento desktop
@@ -25,8 +26,9 @@
 - [x] Existe script Bash para gerar `.deb` e AppImage no Ubuntu/Linux.
 - [x] Existe script PowerShell para gerar instalador NSIS e executável portátil no Windows.
 - [x] O `package.json` fixa Electron, electron-builder e `@electron/packager`, com alvos Windows e Linux; o `.deb` é montado por `dpkg-deb`.
-- [x] A documentação explica requisitos, comandos, artefatos e a limitação atual de persistência em memória.
-- [ ] Na próxima etapa, ligar a aplicação empacotada ao backend Python com SQLite real e definir armazenamento de dados do usuário.
+- [x] A documentação explica requisitos, comandos, artefatos e o backend local em `backend/README.md`.
+- [x] O Electron inicia e encerra o backend Python local e guarda o banco no diretório de dados do usuário; há fallback para Python instalado e suporte a executável nativo compilado.
+- [ ] Gerar e validar o executável nativo do backend para Linux ARM64 e Windows x64 no mesmo sistema operacional/arquitetura de cada instalador.
 
 ## Instalação offline para testes
 

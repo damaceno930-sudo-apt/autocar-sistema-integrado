@@ -13,7 +13,7 @@ npx electron-packager . "$PRODUCT_NAME" \
   --arch=x64 \
   --out=release \
   --overwrite \
-  --asar \
+  --asar.unpackDir=backend \
   --electron-version=22.3.27 \
   --app-version="$VERSION" \
   --prune=true \

@@ -8,11 +8,11 @@ Criar um protótipo em HTML, CSS e JavaScript, 100% offline, sem APIs externas, 
 
 O produto será um monólito modular: uma aplicação única, um processo local e um banco SQLite compartilhado. Cada módulo terá sua própria camada de rotas, serviços, regras e telas, mas todos usarão o mesmo núcleo de autenticação, auditoria e acesso a dados. O administrador poderá criar logins e liberar módulos individualmente.
 
-Quando o backend Python/SQLite for conectado, a base deverá conter usuários, credenciais com hash, perfis, permissões por módulo, sessões, logs de auditoria e os dados operacionais. A interface atual simula esse fluxo em memória para validar a experiência.
+O backend Python/SQLite local foi conectado: a base contém usuários com hash PBKDF2, perfis, permissões por módulo, logs de auditoria e tabelas operacionais de clientes, veículos, estoque, serviços, OS, fornecedores, vendas e financeiro. O frontend mantém um snapshot compatível para hidratação e persistência debounced, com fallback apenas para execução do protótipo sem servidor.
 
-## Objetivo do protótipo
+## Objetivo do protótipo e da fase persistente
 
-Demonstrar a navegação, o login e a hierarquia visual do sistema antes da implementação do backend Python/SQLite. O protótipo terá dados demonstrativos em memória, busca local, alternância entre módulos, filtros de OS, atualização visual de status, criação de usuários, seleção de permissões por módulo, bloqueio de telas não autorizadas, modal para nova ordem e toast de confirmação. Nenhuma alteração será persistida ainda.
+Preservar a navegação e a hierarquia visual do protótipo, agora com persistência local. A interface usa dados demonstrativos seedados no SQLite, busca local, alternância entre módulos, filtros de OS, atualização de status, criação de usuários, permissões por módulo, bloqueio de telas não autorizadas, nova ordem, cadastro de estoque/clientes/serviços e toasts. Alterações feitas com o backend ativo são persistidas no banco local; se o servidor não estiver disponível, o fallback em memória continua útil para demonstração.
 
 ## Módulos representados
 
@@ -42,11 +42,15 @@ Demonstrar a navegação, o login e a hierarquia visual do sistema antes da impl
 - `index.html`: shell da aplicação e marcação principal.
 - `styles.css`: tokens, componentes, responsividade e estados visuais.
 - `app.js`: estado local, renderização dos módulos e interações.
+- `backend/server.py`: API local, autenticação com hash, SQLite, backups, importação e auditoria.
+- `backend/README.md`: execução, endpoints e empacotamento nativo.
+- `desktop/main.cjs`: inicialização/encerramento do backend junto ao Electron.
+- `scripts/build-backend.sh` / `scripts/build-backend.ps1`: compilação opcional do backend nativo por plataforma.
 - `public/manus-routes.json`: manifesto da rota principal para o Preview.
 
 ## Implementação e entrega
 
-Usar servidor estático local na porta 3000. Configurar diagnóstico JavaScript/HTML/CSS, validar sintaxe e verificar o manifesto de rotas. Depois, iniciar o Preview e criar um checkpoint com os arquivos do protótipo.
+Usar servidor estático local na porta 3000 e backend local na porta 8765. Configurar diagnóstico JavaScript/HTML/CSS, validar sintaxe, verificar o manifesto de rotas, testar autenticação/persistência/backup/limpeza e criar um checkpoint com os arquivos do protótipo e do backend. Para instaladores sem Python no computador do usuário, compilar o backend com PyInstaller no mesmo sistema operacional/arquitetura antes do empacotamento.
 
 ## Estoque e peças
 

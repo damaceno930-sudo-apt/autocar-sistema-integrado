@@ -69,8 +69,54 @@ const state = {
     { name: 'Abraçadeira metálica 12 mm', code: 'ABR-12-M', category: 'Materiais', stock: 3, min: 10, max: 60, unit: 'cx', price: 48.0, cost: 31.0, location: 'Gaveta D2', supplier: 'FixParts' }
   ],
   units: ['un.', 'pc', 'jogo', 'par', 'kit', 'cx', 'm', 'cm', 'mm', 'ml', 'l', 'g', 'kg', 'rolo']
-  ,suppliers: [{ id: 1, name: 'AutoParts Brasil', document: '45.210.908/0001-20', phone: '(11) 3322-1190', category: 'Peças' }, { id: 2, name: 'LubriMax Distribuidora', document: '09.481.220/0001-44', phone: '(11) 4012-8830', category: 'Lubrificantes' }]
+  ,suppliers: [{ id: 1, name: 'AutoParts Brasil', document: '45.210.908/0001-20', phone: '(11) 3322-1190', category: 'Peças' }, { id: 2, name: 'LubriMax Distribuidora', document: '09.481.220/0001-44', phone: '(11) 4012-8830', category: 'Lubrificantes' }],
+  sales: [],
+  financeEntries: []
 };
+
+const API_BASE = 'http://127.0.0.1:8765/api';
+let apiToken = '';
+let backendOnline = false;
+let stateHydrated = false;
+let persistTimer = null;
+
+async function apiRequest(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (apiToken) headers['X-AutoCar-Token'] = apiToken;
+  if (options.body && typeof options.body !== 'string' && !(options.body instanceof Blob)) {
+    headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(options.body);
+  }
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('json') ? await response.json() : await response.blob();
+  if (!response.ok) throw new Error(data?.message || data?.error || `API ${response.status}`);
+  return data;
+}
+
+function hydrateState(serverState) {
+  const preserved = { view: state.view, search: state.search, status: state.status, inventoryCategory: state.inventoryCategory, inventoryStatus: state.inventoryStatus, saleCart: state.saleCart, saleSearch: state.saleSearch, saleReceived: state.saleReceived, servicesTab: state.servicesTab, financeTab: state.financeTab, settingsTab: state.settingsTab };
+  ['company', 'clients', 'orders', 'inventory', 'services', 'units', 'suppliers', 'users'].forEach((key) => {
+    if (serverState[key] !== undefined) state[key] = serverState[key];
+  });
+  if (Array.isArray(serverState.services)) {
+    serviceCatalog.splice(0, serviceCatalog.length, ...serverState.services);
+  }
+  Object.assign(state, preserved);
+  if (state.clients[0]) { state.saleClientId = state.saleClientId || state.clients[0].id; state.saleVehicleId = state.saleVehicleId || state.clients[0].vehicles?.[0]?.id || null; }
+  stateHydrated = true;
+}
+
+function queuePersist() {
+  if (!backendOnline || !stateHydrated || !apiToken) return;
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    apiRequest('/state', { method: 'PUT', body: snapshotData() }).catch((error) => {
+      backendOnline = false;
+      console.warn('Persistência SQLite indisponível:', error.message);
+    });
+  }, 250);
+}
 
 const titles = {
   dashboard: ['Visão geral', 'Dashboard'], orders: ['Operação', 'Ordens de serviço'], customers: ['Operação', 'Clientes e veículos'], sales: ['Operação', 'Vendas e nova OS'], inventory: ['Operação', 'Estoque e peças'], services: ['Operação', 'Serviços e preços'], schedule: ['Operação', 'Agendamentos'], diagnostics: ['Gestão', 'Diagnóstico'], finance: ['Gestão', 'Financeiro'], reports: ['Gestão', 'Relatórios'], settings: ['Sistema', 'Configurações'], backup: ['Sistema', 'Backup local']
@@ -126,7 +172,18 @@ function login(user) {
   renderView();
   showToast(`Olá, ${user.name.split(' ')[0]}. Acesso liberado.`);
 }
+async function loginWithBackend(loginValue, password) {
+  const result = await apiRequest('/auth/login', { method: 'POST', body: { login: loginValue, password } });
+  apiToken = result.token;
+  backendOnline = true;
+  hydrateState(result.state);
+  login(result.user);
+}
 function logout() {
+  if (apiToken) apiRequest('/auth/logout', { method: 'POST' }).catch(() => {});
+  apiToken = '';
+  backendOnline = false;
+  stateHydrated = false;
   state.authenticated = false;
   state.currentUser = null;
   document.getElementById('app-shell').classList.add('is-hidden');
@@ -228,6 +285,7 @@ function renderView() {
   document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === state.view));
   updateSessionUI();
   renderIcons();
+  queuePersist();
 }
 
 function printOrder(id) {
@@ -275,13 +333,13 @@ function generateOrderFromSale() { const client = state.clients.find((item) => i
 function registerUnit() { const unit = window.prompt('Informe a nova unidade. Ex.: lata, tubo ou frasco'); if (!unit) return; const normalized = unit.trim().toLowerCase(); if (!normalized || state.units.includes(normalized)) { showToast('Essa unidade já está cadastrada ou é inválida.', 'error'); return; } state.units.push(normalized); renderView(); showToast(`Unidade ${normalized} adicionada ao catálogo.`); }
 function adjustInventory() { const code = window.prompt('Digite o código do item para ajustar o saldo'); if (!code) return; const item = state.inventory.find((entry) => entry.code.toLowerCase() === code.trim().toLowerCase()); if (!item) { showToast('Item não encontrado no inventário.', 'error'); return; } const quantity = window.prompt(`Novo saldo para ${item.name} (${item.unit})`, String(item.stock)); if (quantity === null || Number.isNaN(Number(quantity)) || Number(quantity) < 0) { showToast('Saldo inválido para o ajuste.', 'error'); return; } item.stock = Number(quantity); renderView(); showToast(`Inventário ajustado: ${item.name}.`); }
 function registerSupplier() { const name = window.prompt('Nome do fornecedor'); if (!name) return; const document = window.prompt('CNPJ do fornecedor', '00.000.000/0001-00') || 'Não informado'; const phone = window.prompt('Telefone do fornecedor', '(00) 0000-0000') || 'Não informado'; const category = window.prompt('Categoria principal', 'Peças') || 'Geral'; state.suppliers.push({ id: Date.now(), name: name.trim(), document, phone, category }); renderView(); showToast(`Fornecedor ${name.trim()} cadastrado.`); }
-function snapshotData() { return { company: state.company, users: state.users, clients: state.clients, orders: state.orders, inventory: state.inventory, services: serviceCatalog, units: state.units, suppliers: state.suppliers }; }
+function snapshotData() { return { company: state.company, users: state.users, clients: state.clients, orders: state.orders, inventory: state.inventory, services: serviceCatalog, units: state.units, suppliers: state.suppliers, sales: state.sales || [], financeEntries: state.financeEntries || [] }; }
 function downloadData(filename, content, type) { const blob = new Blob([content], { type }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url); }
-function exportJson() { downloadData('autocar-backup.json', JSON.stringify(snapshotData(), null, 2), 'application/json'); showToast('Backup JSON exportado.'); }
+function exportJson() { if (backendOnline) { apiRequest('/backup/json').then((data) => data instanceof Blob ? downloadData('autocar-backup.json', data, 'application/json') : null).catch(() => downloadData('autocar-backup.json', JSON.stringify(snapshotData(), null, 2), 'application/json')); } else downloadData('autocar-backup.json', JSON.stringify(snapshotData(), null, 2), 'application/json'); showToast('Backup JSON exportado.'); }
 function exportCsv() { const rows = [['tipo', 'id', 'nome', 'codigo', 'categoria', 'quantidade', 'unidade', 'valor']]; state.inventory.forEach((item) => rows.push(['produto', '', item.name, item.code, item.category, item.stock, item.unit, item.price])); serviceCatalog.forEach((item) => rows.push(['servico', item.id, item.name, item.code, item.category, '', '', item.price])); const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(';')).join('\n'); downloadData('autocar-catalogo.csv', csv, 'text/csv;charset=utf-8'); showToast('Tabelas CSV exportadas.'); }
-function exportSqlite() { showToast('A exportação binária SQLite será gerada pelo backend Python conectado ao banco local.'); }
-function importDataFile(file) { if (!file) return; const extension = file.name.split('.').pop().toLowerCase(); if (extension === 'sqlite' || extension === 'db') { showToast('Arquivo SQLite recebido. A restauração será executada pelo backend SQLite na próxima etapa.'); return; } const reader = new FileReader(); reader.onload = () => { if (extension === 'json') { try { const data = JSON.parse(reader.result); if (data.company) state.company = data.company; if (Array.isArray(data.clients)) state.clients = data.clients; if (Array.isArray(data.orders)) state.orders = data.orders; if (Array.isArray(data.inventory)) state.inventory = data.inventory; if (Array.isArray(data.units)) state.units = data.units; if (Array.isArray(data.users)) state.users = data.users; if (Array.isArray(data.services)) { serviceCatalog.splice(0, serviceCatalog.length, ...data.services); } if (Array.isArray(data.suppliers)) state.suppliers = data.suppliers; renderView(); showToast('Backup JSON importado no protótipo.'); } catch { showToast('JSON inválido ou incompatível.', 'error'); } } else { const rows = String(reader.result).trim().split(/\r?\n/).slice(1).map((line) => line.split(';').map((cell) => cell.replace(/^\"|\"$/g, '').replace(/\"\"/g, '\"'))); let imported = 0; rows.forEach((row) => { if (row[0] === 'produto' && row[2] && row[3]) { const existing = state.inventory.find((item) => item.code === row[3]); const item = { name: row[2], code: row[3], category: row[4] || 'Importados', stock: Number(row[5]) || 0, min: 0, max: Number(row[5]) || 0, unit: row[6] || 'un.', price: Number(row[7]) || 0, cost: 0, location: 'Importado', supplier: 'Importado' }; if (existing) Object.assign(existing, item); else state.inventory.push(item); imported += 1; } if (row[0] === 'servico' && row[2] && row[3]) { serviceCatalog.push({ id: row[1] || `svc-${Date.now()}-${imported}`, kind: 'service', name: row[2], code: row[3], category: row[4] || 'Importados', price: Number(row[7]) || 0, duration: 'Importado', description: 'Serviço importado por CSV.' }); imported += 1; } }); renderView(); showToast(`${imported} registros CSV importados.`); } }; reader.readAsText(file); }
-function clearAllData() { if (!window.confirm('Esta ação apagará clientes, veículos, OS, estoque, serviços e usuários não administradores. Deseja continuar?')) return; const admin = state.users.find((user) => user.admin) || { id: 1, name: 'Administrador', login: 'admin@autocar.local', password: 'admin123', role: 'Administrador', admin: true, isMechanic: false, permissions: ['all'] }; state.users = [admin]; state.currentUser = admin; state.clients = []; state.orders = []; state.inventory = []; state.suppliers = []; state.units = ['un.', 'pc', 'jogo', 'par', 'kit', 'cx', 'm', 'cm', 'mm', 'ml', 'l', 'g', 'kg', 'rolo']; serviceCatalog.splice(0, serviceCatalog.length); state.company = { legalName: '', tradeName: '', document: '', phone: '', email: '', address: '', city: '', state: '', zip: '', taxRegime: 'Simples Nacional' }; state.settingsTab = 'company'; renderView(); showToast('Dados limpos. O sistema está pronto para um novo cadastro.'); }
+function exportSqlite() { if (!backendOnline) { showToast('Faça login com o backend local disponível para exportar o SQLite.', 'error'); return; } apiRequest('/backup/sqlite').then((blob) => { downloadData('autocar-backup.db', blob, 'application/vnd.sqlite3'); showToast('Banco SQLite exportado.'); }).catch((error) => showToast(error.message, 'error')); }
+function importDataFile(file) { if (!file) return; const extension = file.name.split('.').pop().toLowerCase(); if ((extension === 'sqlite' || extension === 'db') && backendOnline) { file.arrayBuffer().then((buffer) => apiRequest('/backup/import', { method: 'POST', headers: { 'Content-Type': 'application/vnd.sqlite3' }, body: new Blob([buffer], { type: 'application/vnd.sqlite3' }) })).then((result) => { hydrateState(result.state); renderView(); showToast('Banco SQLite restaurado com sucesso.'); }).catch((error) => showToast(error.message, 'error')); return; } const reader = new FileReader(); reader.onload = () => { if (extension === 'json') { try { const data = JSON.parse(reader.result); if (backendOnline) apiRequest('/backup/import', { method: 'POST', body: data }).then((result) => { hydrateState(result.state); renderView(); showToast('Backup JSON restaurado.'); }).catch((error) => showToast(error.message, 'error')); else { hydrateState(data); renderView(); showToast('Backup JSON importado localmente.'); } } catch { showToast('JSON inválido ou incompatível.', 'error'); } } else { const rows = String(reader.result).trim().split(/\r?\n/).slice(1).map((line) => line.split(';').map((cell) => cell.replace(/^\"|\"$/g, '').replace(/\"\"/g, '\"'))); let imported = 0; rows.forEach((row) => { if (row[0] === 'produto' && row[2] && row[3]) { const existing = state.inventory.find((item) => item.code === row[3]); const item = { name: row[2], code: row[3], category: row[4] || 'Importados', stock: Number(row[5]) || 0, min: 0, max: Number(row[5]) || 0, unit: row[6] || 'un.', price: Number(row[7]) || 0, cost: 0, location: 'Importado', supplier: 'Importado' }; if (existing) Object.assign(existing, item); else state.inventory.push(item); imported += 1; } }); renderView(); showToast(`${imported} registros CSV importados.`); } }; reader.readAsText(file); }
+function clearAllData() { if (!window.confirm('Esta ação apagará clientes, veículos, OS, estoque, serviços e usuários não administradores. Deseja continuar?')) return; if (backendOnline) { apiRequest('/admin/clear', { method: 'POST' }).then((result) => { hydrateState(result.state); state.currentUser = result.user || state.users.find((user) => user.admin); renderView(); showToast('Dados limpos no banco SQLite.'); }).catch((error) => showToast(error.message, 'error')); return; } const admin = state.users.find((user) => user.admin) || { id: 1, name: 'Administrador', login: 'admin@autocar.local', password: 'admin123', role: 'Administrador', admin: true, isMechanic: false, permissions: ['all'] }; state.users = [admin]; state.currentUser = admin; state.clients = []; state.orders = []; state.inventory = []; state.suppliers = []; state.units = ['un.', 'pc', 'jogo', 'par', 'kit', 'cx', 'm', 'cm', 'mm', 'ml', 'l', 'g', 'kg', 'rolo']; serviceCatalog.splice(0, serviceCatalog.length); state.company = { legalName: '', tradeName: '', document: '', phone: '', email: '', address: '', city: '', state: '', zip: '', taxRegime: 'Simples Nacional' }; state.settingsTab = 'company'; renderView(); showToast('Dados limpos. O sistema está pronto para um novo cadastro.'); }
 
 function syncPermissionSelection() {
   const role = document.getElementById('user-role').value;
@@ -338,12 +396,21 @@ function bindEvents() {
     if (event.target.closest('[data-close-customer-modal]') || event.target.id === 'customer-modal-backdrop') closeCustomerModal();
     if (event.target.closest('[data-close-vehicle-modal]') || event.target.id === 'vehicle-modal-backdrop') closeVehicleModal();
   });
-  document.getElementById('login-form').addEventListener('submit', (event) => {
+  document.getElementById('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
-    const user = state.users.find((item) => item.login.toLowerCase() === String(data.get('login')).trim().toLowerCase() && item.password === data.get('password'));
-    if (!user) { document.getElementById('login-error').textContent = 'Login ou senha inválidos. Tente o acesso demonstrativo abaixo.'; return; }
-    login(user);
+    const loginValue = String(data.get('login')).trim();
+    const password = String(data.get('password'));
+    try {
+      await loginWithBackend(loginValue, password);
+    } catch (backendError) {
+      const backendUnavailable = backendError.message === 'Failed to fetch' || backendError.name === 'TypeError';
+      if (!backendUnavailable) { document.getElementById('login-error').textContent = backendError.message || 'Login ou senha inválidos.'; return; }
+      backendOnline = false;
+      const user = state.users.find((item) => item.login.toLowerCase() === loginValue.toLowerCase() && item.password === password);
+      if (!user) { document.getElementById('login-error').textContent = backendError.message === 'Failed to fetch' ? 'Backend local indisponível e credenciais não conferem.' : 'Login ou senha inválidos.'; return; }
+      login(user);
+    }
   });
   document.getElementById('global-search').addEventListener('input', (event) => { state.search = event.target.value; renderView(); });
   document.addEventListener('input', (event) => { if (event.target.id === 'sale-search') { state.saleSearch = event.target.value; renderView(); const search = document.getElementById('sale-search'); search?.focus(); search?.setSelectionRange(state.saleSearch.length, state.saleSearch.length); } if (event.target.id === 'sale-received') { state.saleReceived = Number(event.target.value) || 0; renderView(); const received = document.getElementById('sale-received'); received?.focus(); received?.setSelectionRange(String(state.saleReceived).length, String(state.saleReceived).length); } });

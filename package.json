@@ -9,6 +9,9 @@
   "license": "UNLICENSED",
   "scripts": {
     "start:desktop": "electron .",
+    "start:backend": "python3 backend/server.py",
+    "check:backend": "python3 -m py_compile backend/server.py",
+    "build:backend": "bash scripts/build-backend.sh",
     "package:linux": "bash scripts/package-linux.sh",
     "package:windows": "electron-builder --win nsis portable --x64 --publish never",
     "package:windows:portable": "bash scripts/package-windows-portable.sh",
@@ -24,6 +27,9 @@
     "productName": "AutoCar Sistema Integrado",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "asar": true,
+    "asarUnpack": [
+      "backend/**/*"
+    ],
     "compression": "normal",
     "files": [
       "index.html",
@@ -32,6 +38,7 @@
       "manus-routes.json",
       "public/**/*",
       "desktop/**/*",
+      "backend/**/*",
       "referencia-funcoes.md"
     ],
     "directories": {
