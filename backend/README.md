@@ -58,6 +58,8 @@ As vendas persistem seus itens em `sale_items`. Ao registrar um produto, o saldo
 
 O relatório considera movimentos reais do caixa para entradas/saídas e lançamentos financeiros não cancelados para receitas/despesas. O frontend permite exportar o resultado localmente em JSON e CSV.
 
+Na aba Relatórios, a opção “Imprimir / salvar PDF” monta um documento A4 com cabeçalho da empresa, período, indicadores, categorias, fluxo diário e contas pendentes. A impressão usa o mecanismo nativo do navegador/Electron; no diálogo do sistema o usuário pode imprimir ou selecionar “Salvar como PDF”, sem Internet ou biblioteca externa.
+
 ## Backend nativo para instaladores
 
 Para o aplicativo não depender de Python instalado na máquina do usuário, compile o backend no mesmo sistema operacional/arquitetura do instalador:

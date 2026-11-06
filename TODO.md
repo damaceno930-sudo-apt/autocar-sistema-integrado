@@ -28,6 +28,7 @@
 - [x] Na reversão, devolver produtos ao estoque, cancelar parcelas e comissão, cancelar o lançamento financeiro e registrar estorno dos valores recebidos no caixa aberto.
 - [x] Implementar relatório financeiro por período com fluxo de caixa, receitas, despesas, resultado líquido, categorias e pendências.
 - [x] Implementar consolidação diária e exportação local do relatório financeiro em JSON e CSV.
+- [x] Implementar impressão A4 dos relatórios financeiros com cabeçalho da empresa e opção nativa de salvar como PDF.
 - [x] Persistir em SQLite, via API local, empresa, usuários, permissões, clientes, veículos, estoque, serviços, fornecedores e ordens de serviço, com hidratação do frontend e auditoria.
 - [x] O cadastro de produtos aceita foto local opcional e o catálogo exibe a miniatura sem depender da Internet.
 
