@@ -339,6 +339,32 @@ class Database:
     def stock_movements(self, limit=100):
         return [self.row_dict(row) for row in self.conn.execute("SELECT m.*, s.name AS item_name, s.unit FROM stock_movements m LEFT JOIN stock_items s ON s.code=m.item_code ORDER BY m.created_at DESC LIMIT ?", (limit,))]
 
+    def stock_report(self, start_date=None, end_date=None):
+        today = datetime.now().date(); start = start_date or today.replace(day=1).isoformat(); end = end_date or today.isoformat()
+        try:
+            datetime.strptime(start, "%Y-%m-%d"); datetime.strptime(end, "%Y-%m-%d")
+        except ValueError: raise ValueError("período inválido; use AAAA-MM-DD")
+        if start > end: raise ValueError("a data inicial não pode ser posterior à data final")
+        period_days = max(1, (datetime.strptime(end, "%Y-%m-%d").date() - datetime.strptime(start, "%Y-%m-%d").date()).days + 1)
+        rows = self.conn.execute("SELECT m.*, s.name AS item_name, s.category, s.brand, s.unit, s.stock AS current_stock, s.cost FROM stock_movements m JOIN stock_items s ON s.code=m.item_code WHERE date(m.created_at) BETWEEN date(?) AND date(?) ORDER BY m.created_at", (start, end)).fetchall()
+        items = {row["code"]: {"code": row["code"], "name": row["name"], "category": row["category"] or "Sem categoria", "brand": row["brand"] or "", "unit": row["unit"] or "un.", "current_stock": float(row["current_stock"] or 0), "cost": float(row["cost"] or 0), "entries": 0, "exits": 0, "adjustments": 0, "consumption_value": 0, "first_stock": None} for row in self.conn.execute("SELECT code,name,category,brand,unit,stock AS current_stock,cost FROM stock_items")}
+        daily = {}
+        for row in rows:
+            item = items[row["item_code"]]; quantity = float(row["quantity"] or 0); item["first_stock"] = float(row["previous_stock"]) if item["first_stock"] is None else item["first_stock"]
+            if row["kind"] == "exit": item["exits"] += abs(quantity); item["consumption_value"] += abs(quantity) * float(row["unit_cost"] or item["cost"] or 0)
+            elif row["kind"] == "entry": item["entries"] += abs(quantity)
+            else: item["adjustments"] += quantity
+            day = str(row["created_at"])[:10]; bucket = daily.setdefault(day, {"date": day, "entries": 0, "exits": 0, "adjustments": 0})
+            if row["kind"] == "entry": bucket["entries"] += abs(quantity)
+            elif row["kind"] == "exit": bucket["exits"] += abs(quantity)
+            else: bucket["adjustments"] += quantity
+        ordered = sorted(items.values(), key=lambda item: item["consumption_value"], reverse=True); total_consumption = sum(item["consumption_value"] for item in ordered); cumulative = 0
+        for item in ordered:
+            prior_percent = (cumulative / total_consumption) * 100 if total_consumption else 100; cumulative += item["consumption_value"]; avg_stock = ((item["first_stock"] if item["first_stock"] is not None else item["current_stock"]) + item["current_stock"]) / 2; item["average_stock"] = round(avg_stock, 2); item["turnover"] = round(item["exits"] / avg_stock, 2) if avg_stock > 0 else 0; item["daily_consumption"] = round(item["exits"] / period_days, 4); item["coverage_days"] = round(item["current_stock"] / item["daily_consumption"], 1) if item["daily_consumption"] > 0 else None; item["consumption_value"] = round(item["consumption_value"], 2); item["stock_value"] = round(item["current_stock"] * item["cost"], 2); item["cumulative_percent"] = round((cumulative / total_consumption) * 100, 2) if total_consumption else 0; item["abc"] = "A" if total_consumption and prior_percent < 80 else "B" if total_consumption and prior_percent < 95 else "C"
+        for bucket in daily.values():
+            for key in ("entries", "exits", "adjustments"): bucket[key] = round(bucket[key], 2)
+        return {"period": {"start": start, "end": end, "days": period_days}, "summary": {"items": len(ordered), "stock_value": round(sum(item["stock_value"] for item in ordered), 2), "entries": round(sum(item["entries"] for item in ordered), 2), "exits": round(sum(item["exits"] for item in ordered), 2), "consumption_value": round(total_consumption, 2), "class_a": sum(1 for item in ordered if item["abc"] == "A"), "class_b": sum(1 for item in ordered if item["abc"] == "B"), "class_c": sum(1 for item in ordered if item["abc"] == "C")}, "items": ordered, "daily": [daily[key] for key in sorted(daily)]}
+
     def record_stock_movement(self, code, kind, quantity, previous, resulting, cost, reason, reference_type, reference_id, actor_id, stamp):
         movement_id = f"mov-{secrets.token_hex(8)}"
         self.conn.execute("INSERT INTO stock_movements(id,item_code,kind,quantity,previous_stock,resulting_stock,unit_cost,reason,reference_type,reference_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (movement_id, code, kind, quantity, previous, resulting, cost or 0, reason, reference_type, reference_id, actor_id, stamp))
@@ -772,6 +798,15 @@ class Handler(BaseHTTPRequestHandler):
             if user:
                 query = parse_qs(parsed.query); limit = min(500, max(1, int((query.get("limit") or [100])[0])))
                 self.send_json(200, {"items": DB.stock_movements(limit)})
+            return
+        if parsed.path == "/api/inventory/report":
+            user = self.require_inventory()
+            if user:
+                try:
+                    query = parse_qs(parsed.query)
+                    self.send_json(200, DB.stock_report((query.get("startDate") or [None])[0], (query.get("endDate") or [None])[0]))
+                except Exception as exc:
+                    self.send_json(400, {"error": "bad_request", "message": str(exc)})
             return
         if parsed.path == "/api/finance/transactions":
             user = self.require_finance()
