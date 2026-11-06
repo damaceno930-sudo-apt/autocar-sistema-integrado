@@ -28,6 +28,7 @@
 - [x] Conectar o ajuste físico de inventário ao SQLite e exibir o histórico real no módulo de estoque.
 - [x] Implementar relatório de estoque por período com entradas, consumo, ajustes, valor armazenado, giro, cobertura e curva ABC.
 - [x] Permitir exportação local do relatório de estoque em JSON e CSV.
+- [x] Implementar impressão A4 do relatório de estoque com cabeçalho da empresa e opção nativa de salvar como PDF.
 - [x] Persistir itens vendidos, baixar produtos do estoque e implementar reversão completa de vendas canceladas.
 - [x] Na reversão, devolver produtos ao estoque, cancelar parcelas e comissão, cancelar o lançamento financeiro e registrar estorno dos valores recebidos no caixa aberto.
 - [x] Implementar relatório financeiro por período com fluxo de caixa, receitas, despesas, resultado líquido, categorias e pendências.

@@ -67,6 +67,8 @@ O estoque registra movimentações em `stock_movements`: entradas de compras/XML
 
 O relatório classifica os itens pela participação acumulada no valor consumido: classe A até o primeiro grupo que atinge 80%, classe B até 95% e classe C no restante. O giro é calculado como consumo dividido pelo estoque médio observado; a cobertura estima quantos dias o saldo atual atende ao consumo médio do período.
 
+Na tela do relatório de estoque, “Imprimir / salvar PDF” gera um documento A4 com cabeçalho da empresa, período, indicadores, curva ABC, giro, cobertura e movimentação diária. A saída usa `window.print()` e o diálogo nativo do Electron/navegador, permitindo imprimir ou selecionar “Salvar como PDF” sem Internet.
+
 ## Backend nativo para instaladores
 
 Para o aplicativo não depender de Python instalado na máquina do usuário, compile o backend no mesmo sistema operacional/arquitetura do instalador:
