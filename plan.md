@@ -59,3 +59,15 @@ O cadastro de clientes terá identificação, CPF/CNPJ, nascimento, telefone, e-
 ## Serviços e preços
 
 O módulo possui abas separadas para consultar o catálogo e cadastrar novos serviços. Cada serviço terá nome, código, categoria, preço, duração estimada e descrição. Ao salvar, ele passa a integrar imediatamente o catálogo comercial usado pelo painel de Vendas e Nova OS.
+
+## Mecânicos e responsável técnico
+
+A configuração terá uma aba própria para marcar quais usuários cadastrados são mecânicos. Apenas esses usuários aparecerão na seleção de responsável técnico das novas OS e vendas. A OS armazenará o mecânico responsável associado ao usuário.
+
+## Empresa e documentos
+
+A configuração terá o cadastro da prestadora com razão social, nome fantasia, CPF/CNPJ, contatos, endereço, cidade, UF, CEP e regime tributário. Esses dados serão usados no cabeçalho e identificação das OS, orçamentos e relatórios.
+
+## Importação, exportação e limpeza
+
+A central de dados terá ações para importar e exportar SQLite, CSV e JSON. O botão de limpeza exigirá confirmação, removerá os dados operacionais e usuários não administradores, preservando o acesso administrador para iniciar um novo cadastro.
