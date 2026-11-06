@@ -10,7 +10,7 @@
   "scripts": {
     "start:desktop": "electron .",
     "package:linux": "bash scripts/package-linux.sh",
-    "package:windows": "electron-builder --win nsis portable",
+    "package:windows": "electron-builder --win nsis portable --publish never",
     "package:all": "npm run package:linux && npm run package:windows"
   },
   "devDependencies": {

@@ -27,3 +27,11 @@
 - [x] O `package.json` fixa Electron, electron-builder e `@electron/packager`, com alvos Windows e Linux; o `.deb` é montado por `dpkg-deb`.
 - [x] A documentação explica requisitos, comandos, artefatos e a limitação atual de persistência em memória.
 - [ ] Na próxima etapa, ligar a aplicação empacotada ao backend Python com SQLite real e definir armazenamento de dados do usuário.
+
+## Instalação offline para testes
+
+- [x] O alvo Windows usa Electron 22.3.27 e gera instalador NSIS e executável portátil para Windows 7, Windows 8 e Windows 10 em diante.
+- [x] O alvo Ubuntu gera pacote `.deb` na arquitetura do computador de build usando `dpkg-deb`.
+- [x] A aplicação instalada carrega HTML, CSS e JavaScript locais e não precisa de Internet durante a execução.
+- [x] A atualização automática/publicação online foi desativada no empacotamento.
+- [ ] Gerar os instaladores Windows diretamente em uma máquina Windows e testar a instalação física em Windows 7, Windows 8, Windows 10 e Ubuntu.

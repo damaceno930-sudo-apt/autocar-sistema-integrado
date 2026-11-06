@@ -8,7 +8,7 @@ O aplicativo desktop usa Electron para carregar `index.html`, `styles.css` e `ap
 - Internet apenas durante o primeiro `npm install`, para baixar Electron e electron-builder.
 - Após a instalação das dependências, a execução do aplicativo gerado é offline.
 
-A versão do Electron está fixada em `22.3.27` para preservar a estratégia de compatibilidade com Windows antigos. O instalador Windows é gerado como NSIS e também como executável portátil. No Ubuntu são gerados `.deb` e AppImage.
+A versão do Electron está fixada em `22.3.27` para preservar a estratégia de compatibilidade com Windows 7, Windows 8 e Windows 10 em diante, sem depender do WebView2 instalado no sistema. O instalador Windows é gerado como NSIS e também como executável portátil. No Ubuntu é gerado o `.deb` e, opcionalmente, o AppImage.
 
 ## Ubuntu / Linux
 
