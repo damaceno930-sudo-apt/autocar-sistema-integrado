@@ -32,6 +32,16 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 Os arquivos `.exe` aparecem em `release/`.
 
+Para gerar um executável portátil Windows a partir de Ubuntu/Linux, sem Wine:
+
+```bash
+npm run package:windows:portable
+```
+
+Esse comando cria `release/AutoCar Sistema Integrado-win32-x64/AutoCar Sistema Integrado.exe`. Copie a pasta inteira para o Windows; o `.exe` depende dos arquivos que ficam ao lado dele. O instalador NSIS de arquivo único deve ser gerado diretamente no Windows com `./scripts/package-desktop.ps1`, porque o ambiente Linux ARM64 não executa o componente Wine exigido pelo NSIS.
+
+Para distribuição simples, a pasta também pode ser enviada como `release/AutoCar-Sistema-Integrado-Windows-x64-portable.zip`. No Windows, extraia o ZIP e abra `AutoCar Sistema Integrado.exe`; não mova o executável para fora da pasta extraída.
+
 ## Comandos manuais
 
 ```bash

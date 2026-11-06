@@ -35,3 +35,6 @@
 - [x] A aplicação instalada carrega HTML, CSS e JavaScript locais e não precisa de Internet durante a execução.
 - [x] A atualização automática/publicação online foi desativada no empacotamento.
 - [ ] Gerar os instaladores Windows diretamente em uma máquina Windows e testar a instalação física em Windows 7, Windows 8, Windows 10 e Ubuntu.
+- [x] Foi gerado um executável Windows x64 portátil real com o runtime Electron embutido.
+- [x] A pasta portátil foi compactada em ZIP para extração simples pelo usuário.
+- [ ] Gerar o instalador NSIS `.exe` de arquivo único em uma máquina Windows, pois o host Linux ARM64 não possui Wine compatível para esse alvo.
