@@ -75,3 +75,8 @@ A central de dados terá ações para importar e exportar SQLite, CSV e JSON. O 
 ## Impressão de OS e PDF
 
 Cada OS terá uma impressão customizada em folha A4, com identidade AutoCar, cabeçalho da empresa cadastrada, número da OS, cliente, veículo, placa, mecânico responsável, status, previsão, serviços, valor total, observações e assinaturas. O navegador usará a impressão nativa para permitir salvar o documento como PDF, sem Internet ou dependências externas.
+
+
+## Empacotamento desktop
+
+A camada desktop usa Electron `22.3.27` fixado, carregando os arquivos locais diretamente com `BrowserWindow.loadFile`. O processo principal mantém `nodeIntegration` desativado, `contextIsolation` e sandbox ativados, bloqueia navegação externa e remove o menu da aplicação. O build Linux usa `@electron/packager` para gerar o AppImage e `dpkg-deb` para montar o `.deb`, evitando dependências de arquitetura do `fpm`; o build Windows usa electron-builder para NSIS e executável portátil. Os scripts `scripts/package-desktop.sh` e `scripts/package-desktop.ps1` automatizam a instalação das dependências de build e a geração dos artefatos. O runtime continua totalmente offline; a instalação de dependências é necessária apenas na máquina que empacota o aplicativo.

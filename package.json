@@ -1,0 +1,72 @@
+{
+  "name": "autocar-sistema-integrado",
+  "version": "0.1.0",
+  "description": "AutoCar Sistema Integrado — gestão offline para oficina mecânica",
+  "private": true,
+  "main": "desktop/main.cjs",
+  "homepage": "https://autocar.local",
+  "author": "AutoCar",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start:desktop": "electron .",
+    "package:linux": "bash scripts/package-linux.sh",
+    "package:windows": "electron-builder --win nsis portable",
+    "package:all": "npm run package:linux && npm run package:windows"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "22.3.27",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "br.autocar.sistemaintegrado",
+    "productName": "AutoCar Sistema Integrado",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "compression": "normal",
+    "files": [
+      "index.html",
+      "styles.css",
+      "app.js",
+      "manus-routes.json",
+      "public/**/*",
+      "desktop/**/*",
+      "referencia-funcoes.md"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AutoCar Sistema Integrado"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office",
+      "synopsis": "Gestão offline para oficina mecânica",
+      "description": "Sistema integrado offline para clientes, veículos, ordens de serviço, estoque, vendas e financeiro.",
+      "maintainer": "AutoCar"
+    },
+    "deb": {
+      "priority": "optional",
+      "depends": [
+        "libgtk-3-0",
+        "libnss3"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
+  }
+}
