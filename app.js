@@ -44,6 +44,7 @@ const state = {
   financeTab: 'cash',
   financeSummary: null,
   financeData: { transactions: [], receivables: [], payables: [], movements: [], commissions: [] },
+  financeReport: null,
   settingsTab: 'company',
   company: { legalName: 'Auto Service Prime Serviços Automotivos Ltda.', tradeName: 'Auto Service Prime', document: '12.345.678/0001-90', phone: '(11) 3333-9090', email: 'contato@autoserviceprime.local', address: 'Av. das Oficinas, 500 • Vila Mariana • São Paulo/SP', city: 'São Paulo', state: 'SP', zip: '04100-000', taxRegime: 'Simples Nacional' },
   users: [
@@ -99,7 +100,7 @@ async function apiRequest(path, options = {}) {
 }
 
 function hydrateState(serverState) {
-  const preserved = { view: state.view, search: state.search, status: state.status, inventoryCategory: state.inventoryCategory, inventoryStatus: state.inventoryStatus, saleCart: state.saleCart, saleSearch: state.saleSearch, saleReceived: state.saleReceived, salePaymentMethod: state.salePaymentMethod, saleInstallments: state.saleInstallments, servicesTab: state.servicesTab, financeTab: state.financeTab, settingsTab: state.settingsTab, financeSummary: state.financeSummary, financeData: state.financeData };
+  const preserved = { view: state.view, search: state.search, status: state.status, inventoryCategory: state.inventoryCategory, inventoryStatus: state.inventoryStatus, saleCart: state.saleCart, saleSearch: state.saleSearch, saleReceived: state.saleReceived, salePaymentMethod: state.salePaymentMethod, saleInstallments: state.saleInstallments, servicesTab: state.servicesTab, financeTab: state.financeTab, settingsTab: state.settingsTab, financeSummary: state.financeSummary, financeData: state.financeData, financeReport: state.financeReport };
   ['company', 'clients', 'orders', 'inventory', 'services', 'units', 'suppliers', 'users'].forEach((key) => {
     if (serverState[key] !== undefined) state[key] = serverState[key];
   });
@@ -119,6 +120,12 @@ async function loadFinanceData() {
     state.financeData = { transactions: result.transactions || [], receivables: result.receivables || [], payables: result.payables || [], movements: result.movements || [], commissions: result.commissions || [] };
     if (state.view === 'finance') { document.getElementById('view').innerHTML = renderFinance(); renderIcons(); }
   } catch (error) { showToast(`Financeiro indisponível: ${error.message}`, 'error'); }
+}
+
+async function loadFinanceReport(startDate, endDate) {
+  if (!backendOnline || !apiToken) return;
+  const params = new URLSearchParams(); if (startDate) params.set('startDate', startDate); if (endDate) params.set('endDate', endDate);
+  try { state.financeReport = await apiRequest(`/finance/report?${params.toString()}`); if (state.view === 'finance') { document.getElementById('view').innerHTML = renderFinance(); renderIcons(); } } catch (error) { showToast(`Relatório indisponível: ${error.message}`, 'error'); }
 }
 
 async function financeRequest(path, options = {}) {
@@ -270,12 +277,12 @@ function renderSchedule() { return `${pageHeader('Operação', 'Agendamentos', '
 
 function renderDiagnostics() { return `${pageHeader('Gestão', 'Diagnóstico', 'Transforme sintomas em decisões técnicas rastreáveis.', '<button class="button button-primary" data-action="show-toast">'+icon('plus')+' Iniciar diagnóstico</button>')}<section class="module-grid"><article class="module-card"><span class="module-icon cyan">${icon('scan')}</span><h3>Fila de diagnósticos</h3><p>Veículos aguardando avaliação técnica.</p><div class="metric-inline"><b>03</b><span>na fila</span></div></article><article class="module-card"><span class="module-icon amber">${icon('alert')}</span><h3>Itens reprovados</h3><p>Recomendações aguardando aprovação do cliente.</p><div class="metric-inline"><b>07</b><span>pendências</span></div></article><article class="module-card"><span class="module-icon green">${icon('check')}</span><h3>Laudos concluídos</h3><p>Diagnósticos fechados nos últimos 30 dias.</p><div class="metric-inline"><b>42</b><span>laudos</span></div></article></section><section class="panel table-panel">${panelHeader('Últimos diagnósticos', 'Histórico de avaliações técnicas.')}<div class="table-wrap"><table><thead><tr><th>Veículo</th><th>Sintoma informado</th><th>Técnico</th><th>Resultado</th><th>Data</th></tr></thead><tbody><tr><td><div class="cell-primary"><span class="vehicle-symbol">${icon('car')}</span><div>QWE-3D17<span class="cell-secondary">Jeep Renegade 2019</span></div></div></td><td>Luz da injeção acesa</td><td>Bruno Santos</td><td>${statusPill('done', 'Laudo pronto')}</td><td>Hoje, 09:42</td></tr><tr><td><div class="cell-primary"><span class="vehicle-symbol">${icon('car')}</span><div>FTR-8C44<span class="cell-secondary">Volkswagen T-Cross 2021</span></div></div></td><td>Ruído na suspensão</td><td>João Mendes</td><td>${statusPill('waiting', 'Aguardando aprovação')}</td><td>Ontem, 16:20</td></tr></tbody></table></div></section>`; }
 
-function financePill(status) { const labels = { pending: 'Pendente', partial: 'Parcial', paid: 'Pago', late: 'Atrasado' }; return statusPill(status === 'paid' ? 'done' : status === 'late' ? 'late' : 'waiting', labels[status] || status); }
+function financePill(status) { const labels = { pending: 'Pendente', partial: 'Parcial', paid: 'Pago', late: 'Atrasado', cancelled: 'Cancelado' }; return statusPill(status === 'paid' ? 'done' : status === 'late' ? 'late' : status === 'cancelled' ? 'waiting' : 'waiting', labels[status] || status); }
 function financeDate(value) { return value ? new Date(`${String(value).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '—'; }
 function renderFinance() {
   const summary = state.financeSummary || { register: null, receivable_total: 0, receivable_count: 0, payable_total: 0, payable_count: 0, today_entries: 0, today_exits: 0, today_result: 0 };
   const data = state.financeData || { transactions: [], receivables: [], payables: [], movements: [], commissions: [] };
-  const tabs = `<div class="finance-tabs"><button class="finance-tab ${state.financeTab === 'cash' ? 'active' : ''}" data-finance-tab="cash">${icon('wallet')} Caixa</button><button class="finance-tab ${state.financeTab === 'receivable' ? 'active' : ''}" data-finance-tab="receivable">${icon('arrow')} A receber</button><button class="finance-tab ${state.financeTab === 'payable' ? 'active' : ''}" data-finance-tab="payable">${icon('receipt')} A pagar</button><button class="finance-tab ${state.financeTab === 'expenses' ? 'active' : ''}" data-finance-tab="expenses">${icon('chart')} Despesas e comissões</button></div>`;
+  const tabs = `<div class="finance-tabs"><button class="finance-tab ${state.financeTab === 'cash' ? 'active' : ''}" data-finance-tab="cash">${icon('wallet')} Caixa</button><button class="finance-tab ${state.financeTab === 'receivable' ? 'active' : ''}" data-finance-tab="receivable">${icon('arrow')} A receber</button><button class="finance-tab ${state.financeTab === 'payable' ? 'active' : ''}" data-finance-tab="payable">${icon('receipt')} A pagar</button><button class="finance-tab ${state.financeTab === 'expenses' ? 'active' : ''}" data-finance-tab="expenses">${icon('chart')} Despesas e comissões</button><button class="finance-tab ${state.financeTab === 'report' ? 'active' : ''}" data-finance-tab="report">${icon('trend')} Relatórios</button></div>`;
   const kpis = `<section class="kpi-grid"><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon green">${icon('wallet')}</span><span class="kpi-change">${summary.register ? 'aberto' : 'fechado'}</span></div><strong class="kpi-value">${money(summary.register?.current_balance || 0)}</strong><span class="kpi-label">Saldo atual do caixa</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon cyan">${icon('arrow')}</span><span class="kpi-change">hoje</span></div><strong class="kpi-value">${money(summary.today_entries)}</strong><span class="kpi-label">Entradas do dia</span></article><article class="kpi-card"><div class="kpi-top"><span class="kpi-icon red">${icon('alert')}</span><span class="kpi-change down">${summary.payable_count} contas</span></div><strong class="kpi-value">${money(summary.payable_total)}</strong><span class="kpi-label">Compromissos em aberto</span></article></section>`;
   const cashForm = summary.register ? `<form id="cash-movement-form" class="inline-finance-form"><input name="description" required placeholder="Descrição da movimentação" /><select name="kind"><option value="entry">Entrada</option><option value="supply">Suprimento</option><option value="bleed">Sangria</option><option value="withdrawal">Saída</option></select><select name="paymentMethod"><option>Dinheiro</option><option>PIX</option><option>Cartão</option><option>Transferência</option></select><input name="amount" type="number" min="0.01" step="0.01" required placeholder="Valor" /><button class="button button-primary" type="submit">Registrar</button></form><button class="button button-ghost" data-action="finance-close-cash">Fechar caixa</button>` : `<form id="cash-open-form" class="inline-finance-form"><input name="openingBalance" type="number" min="0" step="0.01" required placeholder="Saldo inicial" /><input name="notes" placeholder="Observação opcional" /><button class="button button-primary" type="submit">Abrir caixa</button></form>`;
   const cash = `${kpis}<section class="dashboard-grid"><article class="panel">${panelHeader('Controle de caixa', summary.register ? 'Caixa aberto e pronto para movimentações.' : 'Nenhum caixa aberto no momento.')}${cashForm}</article><article class="panel">${panelHeader('Resumo do dia', 'Valores calculados a partir do caixa local.')}<div class="progress-list"><div class="progress-line"><span>Entradas</span><b>${money(summary.today_entries)}</b></div><div class="progress-line"><span>Saídas</span><b>${money(summary.today_exits)}</b></div><div class="progress-line"><span>Resultado</span><b>${money(summary.today_result)}</b></div></div></article></section><section class="panel table-panel">${panelHeader('Movimentações recentes', `${data.movements.length} registros`)}<div class="table-wrap"><table><thead><tr><th>Descrição</th><th>Tipo</th><th>Forma</th><th>Valor</th><th>Data</th></tr></thead><tbody>${data.movements.length ? data.movements.map((item) => `<tr><td>${esc(item.description)}</td><td>${esc(item.kind)}</td><td>${esc(item.payment_method || '—')}</td><td>${money(item.amount)}</td><td>${financeDate(item.created_at)}</td></tr>`).join('') : '<tr><td colspan="5">Nenhuma movimentação registrada.</td></tr>'}</tbody></table></div></section>`;
@@ -285,7 +292,9 @@ function renderFinance() {
   const payable = `${kpis}<section class="panel">${panelHeader('Nova conta a pagar', 'Registre fornecedores, despesas e compromissos futuros.')}${accountForm('payable')}</section>${accountsTable(data.payables, 'payable')}`;
   const transactionForm = `<form id="finance-transaction-form" class="inline-finance-form"><select name="kind"><option value="expense">Despesa</option><option value="income">Receita</option></select><input name="category" required placeholder="Categoria" /><input name="description" required placeholder="Descrição" /><input name="amount" type="number" min="0.01" step="0.01" required placeholder="Valor" /><select name="status"><option value="pending">Pendente</option><option value="paid">Pago</option></select><button class="button button-primary" type="submit">Lançar</button></form>`;
   const expenses = `<section class="panel">${panelHeader('Novo lançamento', 'Receita ou despesa manual com auditoria local.')}${transactionForm}</section><section class="panel table-panel">${panelHeader('Lançamentos recentes', `${data.transactions.length} registros`)}<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>${data.transactions.length ? data.transactions.map((item) => `<tr><td>${item.kind === 'income' ? 'Receita' : 'Despesa'}</td><td>${esc(item.category)}</td><td>${esc(item.description)}</td><td>${money(item.amount)}</td><td>${financePill(item.status)}</td><td>${item.sale_id && item.status !== 'cancelled' ? `<button class="button button-ghost compact-button" data-cancel-sale="${esc(item.sale_id)}">Reverter venda</button>` : ''}</td></tr>`).join('') : '<tr><td colspan="6">Nenhum lançamento manual.</td></tr>'}</tbody></table></div></section><section class="panel table-panel">${panelHeader('Comissões', 'Comissões registradas por vendas concluídas.')}<div class="table-wrap"><table><thead><tr><th>Vendedor</th><th>Base</th><th>Percentual</th><th>Valor</th><th>Status</th></tr></thead><tbody>${data.commissions.length ? data.commissions.map((item) => `<tr><td>${esc(item.seller_name || '—')}</td><td>${money(item.base_amount)}</td><td>${item.rate}%</td><td>${money(item.amount)}</td><td>${financePill(item.status)}</td></tr>`).join('') : '<tr><td colspan="5">Nenhuma comissão registrada.</td></tr>'}</tbody></table></div></section>`;
-  const content = state.financeTab === 'cash' ? cash : state.financeTab === 'receivable' ? receivable : state.financeTab === 'payable' ? payable : expenses;
+  const report = state.financeReport || { period: {}, cash: { entries: 0, exits: 0, result: 0 }, accrual: { revenue: 0, expense: 0, result: 0 }, categories: [], daily: [], pending: { receivable: { total: 0, count: 0 }, payable: { total: 0, count: 0 } } };
+  const reportContent = `<section class="panel"><form id="finance-report-form" class="inline-finance-form"><label class="field"><span>Data inicial</span><input name="startDate" type="date" value="${esc(report.period.start || '')}" required /></label><label class="field"><span>Data final</span><input name="endDate" type="date" value="${esc(report.period.end || '')}" required /></label><button class="button button-primary" type="submit">Gerar relatório</button><button class="button button-ghost" type="button" data-finance-export="json">Exportar JSON</button><button class="button button-ghost" type="button" data-finance-export="csv">Exportar CSV</button></form></section><section class="kpi-grid"><article class="kpi-card"><strong class="kpi-value">${money(report.cash.entries)}</strong><span class="kpi-label">Entradas no caixa</span></article><article class="kpi-card"><strong class="kpi-value">${money(report.cash.exits)}</strong><span class="kpi-label">Saídas no caixa</span></article><article class="kpi-card"><strong class="kpi-value">${money(report.accrual.revenue)}</strong><span class="kpi-label">Receitas</span></article><article class="kpi-card"><strong class="kpi-value">${money(report.accrual.expense)}</strong><span class="kpi-label">Despesas</span></article></section><section class="dashboard-grid"><article class="panel">${panelHeader('Resultado do período', `${financeDate(report.period.start)} a ${financeDate(report.period.end)}`)}<div class="progress-list"><div class="progress-line"><span>Resultado de caixa</span><b>${money(report.cash.result)}</b></div><div class="progress-line"><span>Resultado receitas/despesas</span><b>${money(report.accrual.result)}</b></div><div class="progress-line"><span>A receber no período</span><b>${money(report.pending.receivable.total)} (${report.pending.receivable.count})</b></div><div class="progress-line"><span>A pagar no período</span><b>${money(report.pending.payable.total)} (${report.pending.payable.count})</b></div></div></article><article class="panel table-panel">${panelHeader('Receitas e despesas por categoria', 'Lançamentos não cancelados no período.')}<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Categoria</th><th>Valor</th></tr></thead><tbody>${report.categories.length ? report.categories.map((item) => `<tr><td>${item.kind === 'income' ? 'Receita' : 'Despesa'}</td><td>${esc(item.category)}</td><td>${money(item.amount)}</td></tr>`).join('') : '<tr><td colspan="3">Nenhum lançamento no período.</td></tr>'}</tbody></table></div></article></section><section class="panel table-panel">${panelHeader('Fluxo de caixa diário', 'Entradas, saídas e resultado por dia.')}<div class="table-wrap"><table><thead><tr><th>Data</th><th>Entradas</th><th>Saídas</th><th>Resultado caixa</th><th>Receitas</th><th>Despesas</th></tr></thead><tbody>${report.daily.length ? report.daily.map((item) => `<tr><td>${financeDate(item.date)}</td><td>${money(item.entries)}</td><td>${money(item.exits)}</td><td>${money(item.result)}</td><td>${money(item.revenue)}</td><td>${money(item.expense)}</td></tr>`).join('') : '<tr><td colspan="6">Nenhuma movimentação no período.</td></tr>'}</tbody></table></div></section>`;
+  const content = state.financeTab === 'cash' ? cash : state.financeTab === 'receivable' ? receivable : state.financeTab === 'payable' ? payable : state.financeTab === 'expenses' ? expenses : reportContent;
   return `${pageHeader('Gestão', 'Financeiro', 'Caixa, contas, despesas, faturamento e comissões em um só lugar.')} ${tabs}${content}`;
 }
 function renderReports() {
@@ -317,6 +326,7 @@ function renderView() {
   renderIcons();
   queuePersist();
   if (state.view === 'finance' && backendOnline && !state.financeSummary) loadFinanceData();
+  if (state.view === 'finance' && state.financeTab === 'report' && backendOnline && !state.financeReport) loadFinanceReport();
 }
 
 function printOrder(id) {
@@ -402,6 +412,19 @@ async function cancelSaleFrontend(saleId) {
   try { const result = await financeRequest(`/finance/sales/${encodeURIComponent(saleId)}/cancel`, { method: 'POST', body: { reason, paymentMethod: 'Estorno' } }); showToast(`Venda cancelada. Estorno: ${money(result.refund || 0)}.`); } catch (error) { showToast(error.message, 'error'); }
 }
 
+function exportFinanceReport(format) {
+  if (!state.financeReport) { showToast('Gere um relatório antes de exportar.', 'error'); return; }
+  if (format === 'json') downloadData('autocar-relatorio-financeiro.json', JSON.stringify(state.financeReport, null, 2), 'application/json');
+  else {
+    const rows = [['seção', 'data', 'tipo', 'categoria', 'entradas', 'saídas', 'resultado', 'receitas', 'despesas', 'valor']];
+    state.financeReport.daily.forEach((item) => rows.push(['fluxo_diario', item.date, '', '', item.entries, item.exits, item.result, item.revenue, item.expense, '']));
+    state.financeReport.categories.forEach((item) => rows.push(['categoria', '', item.kind, item.category, '', '', '', '', '', item.amount]));
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(';')).join('\n');
+    downloadData('autocar-relatorio-financeiro.csv', csv, 'text/csv;charset=utf-8');
+  }
+  showToast(`Relatório financeiro exportado em ${format.toUpperCase()}.`);
+}
+
 function syncPermissionSelection() {
   const role = document.getElementById('user-role').value;
   const isAdmin = role === 'admin';
@@ -450,7 +473,9 @@ function bindEvents() {
     const settingsTab = event.target.closest('[data-settings-tab]');
     if (settingsTab) { state.settingsTab = settingsTab.dataset.settingsTab; renderView(); return; }
     const financeTab = event.target.closest('[data-finance-tab]');
-    if (financeTab) { state.financeTab = financeTab.dataset.financeTab; renderView(); return; }
+    if (financeTab) { state.financeTab = financeTab.dataset.financeTab; renderView(); if (state.financeTab === 'report' && backendOnline && !state.financeReport) loadFinanceReport(); return; }
+    const financeExport = event.target.closest('[data-finance-export]');
+    if (financeExport) { exportFinanceReport(financeExport.dataset.financeExport); return; }
     if (event.target.closest('[data-action="finance-close-cash"]')) { closeFinanceCash(); return; }
     const cancelSaleButton = event.target.closest('[data-cancel-sale]');
     if (cancelSaleButton) { cancelSaleFrontend(cancelSaleButton.dataset.cancelSale); return; }
@@ -557,6 +582,7 @@ function bindEvents() {
   });
   document.addEventListener('submit', async (event) => {
     const form = event.target;
+    if (form.id === 'finance-report-form') { event.preventDefault(); const data = Object.fromEntries(new FormData(form).entries()); await loadFinanceReport(data.startDate, data.endDate); return; }
     if (!['finance-transaction-form', 'finance-account-form', 'cash-open-form', 'cash-movement-form'].includes(form.id)) return;
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());

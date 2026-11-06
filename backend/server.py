@@ -283,6 +283,41 @@ class Database:
         exits = self.conn.execute("SELECT COALESCE(SUM(amount),0) FROM cash_movements WHERE kind IN ('withdrawal','bleed','expense') AND date(created_at)=date('now')").fetchone()[0]
         return {"register": register_data, "receivable_total": round(receivable["total"], 2), "receivable_count": receivable["count"], "payable_total": round(payable["total"], 2), "payable_count": payable["count"], "today_entries": round(entries, 2), "today_exits": round(exits, 2), "today_result": round(entries - exits, 2)}
 
+    def finance_report(self, start_date=None, end_date=None):
+        today = datetime.now().date()
+        start = start_date or today.replace(day=1).isoformat()
+        end = end_date or today.isoformat()
+        try:
+            datetime.strptime(start, "%Y-%m-%d"); datetime.strptime(end, "%Y-%m-%d")
+        except ValueError: raise ValueError("período inválido; use AAAA-MM-DD")
+        if start > end: raise ValueError("a data inicial não pode ser posterior à data final")
+        movements = [self.row_dict(row) for row in self.conn.execute("SELECT m.*, r.opened_at FROM cash_movements m JOIN cash_registers r ON r.id=m.register_id WHERE date(m.created_at) BETWEEN date(?) AND date(?) ORDER BY m.created_at", (start, end))]
+        transactions = [self.row_dict(row) for row in self.conn.execute("SELECT * FROM finance_transactions WHERE status != 'cancelled' AND date(COALESCE(paid_date,created_at)) BETWEEN date(?) AND date(?) ORDER BY created_at", (start, end))]
+        entries = round(sum(float(row["amount"]) for row in movements if row["kind"] in ("entry", "supply")), 2)
+        exits = round(sum(float(row["amount"]) for row in movements if row["kind"] in ("withdrawal", "bleed", "expense")), 2)
+        revenue = round(sum(float(row["amount"]) for row in transactions if row["kind"] == "income"), 2)
+        expense = round(sum(float(row["amount"]) for row in transactions if row["kind"] == "expense"), 2)
+        by_category = {}
+        for row in transactions:
+            key = (row["kind"], row["category"] or "Geral")
+            by_category[key] = by_category.get(key, 0) + float(row["amount"])
+        daily = {}
+        for row in movements:
+            day = str(row["created_at"])[:10]; bucket = daily.setdefault(day, {"date": day, "entries": 0, "exits": 0, "result": 0})
+            if row["kind"] in ("entry", "supply"): bucket["entries"] += float(row["amount"])
+            else: bucket["exits"] += float(row["amount"])
+        for row in transactions:
+            day = str(row["paid_date"] or row["created_at"])[:10]; bucket = daily.setdefault(day, {"date": day, "entries": 0, "exits": 0, "result": 0})
+            bucket["revenue"] = bucket.get("revenue", 0) + (float(row["amount"]) if row["kind"] == "income" else 0)
+            bucket["expense"] = bucket.get("expense", 0) + (float(row["amount"]) if row["kind"] == "expense" else 0)
+        for bucket in daily.values():
+            bucket.setdefault("revenue", 0); bucket.setdefault("expense", 0)
+            for key in ("entries", "exits", "revenue", "expense"): bucket[key] = round(bucket[key], 2)
+            bucket["result"] = round(bucket["entries"] - bucket["exits"], 2)
+        pending = self.conn.execute("SELECT COALESCE(SUM(amount-paid_amount),0) AS total, COUNT(*) AS count FROM accounts_receivable WHERE status IN ('pending','partial','late') AND due_date BETWEEN ? AND ?", (start, end)).fetchone()
+        pending_payable = self.conn.execute("SELECT COALESCE(SUM(amount-paid_amount),0) AS total, COUNT(*) AS count FROM accounts_payable WHERE status IN ('pending','partial','late') AND due_date BETWEEN ? AND ?", (start, end)).fetchone()
+        return {"period": {"start": start, "end": end}, "cash": {"entries": entries, "exits": exits, "result": round(entries - exits, 2)}, "accrual": {"revenue": revenue, "expense": expense, "result": round(revenue - expense, 2)}, "categories": [{"kind": kind, "category": category, "amount": round(amount, 2)} for (kind, category), amount in sorted(by_category.items())], "daily": [daily[key] for key in sorted(daily)], "pending": {"receivable": {"total": round(pending["total"], 2), "count": pending["count"]}, "payable": {"total": round(pending_payable["total"], 2), "count": pending_payable["count"]}}, "transactions": transactions, "movements": movements}
+
     def finance_lists(self, limit=100):
         return {
             "transactions": [self.row_dict(row) for row in self.conn.execute("SELECT * FROM finance_transactions ORDER BY created_at DESC LIMIT ?", (limit,))],
@@ -683,6 +718,15 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/finance/summary":
             user = self.require_finance()
             if user: self.send_json(200, {"summary": DB.finance_summary(), **DB.finance_lists()})
+            return
+        if parsed.path == "/api/finance/report":
+            user = self.require_finance()
+            if user:
+                try:
+                    query = parse_qs(parsed.query)
+                    self.send_json(200, DB.finance_report((query.get("startDate") or [None])[0], (query.get("endDate") or [None])[0]))
+                except Exception as exc:
+                    self.send_json(400, {"error": "bad_request", "message": str(exc)})
             return
         if parsed.path == "/api/finance/transactions":
             user = self.require_finance()

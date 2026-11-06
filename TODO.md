@@ -26,7 +26,8 @@
 - [x] Impedir a importação duplicada da mesma NF/documento de compra.
 - [x] Persistir itens vendidos, baixar produtos do estoque e implementar reversão completa de vendas canceladas.
 - [x] Na reversão, devolver produtos ao estoque, cancelar parcelas e comissão, cancelar o lançamento financeiro e registrar estorno dos valores recebidos no caixa aberto.
-- [ ] Implementar relatórios/exportações financeiras.
+- [x] Implementar relatório financeiro por período com fluxo de caixa, receitas, despesas, resultado líquido, categorias e pendências.
+- [x] Implementar consolidação diária e exportação local do relatório financeiro em JSON e CSV.
 - [x] Persistir em SQLite, via API local, empresa, usuários, permissões, clientes, veículos, estoque, serviços, fornecedores e ordens de serviço, com hidratação do frontend e auditoria.
 - [x] O cadastro de produtos aceita foto local opcional e o catálogo exibe a miniatura sem depender da Internet.
 
