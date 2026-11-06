@@ -24,6 +24,8 @@
 - [x] Criar CRUD inicial de categorias financeiras persistentes.
 - [x] Gerar conta a pagar automaticamente a partir de entrada manual de estoque e importação XML/NF-e, vinculando fornecedor, documento, vencimento e forma de pagamento.
 - [x] Impedir a importação duplicada da mesma NF/documento de compra.
+- [x] Persistir histórico de entradas, saídas, devoluções e ajustes de estoque com saldo anterior/resultante, motivo, referência e auditoria.
+- [x] Conectar o ajuste físico de inventário ao SQLite e exibir o histórico real no módulo de estoque.
 - [x] Persistir itens vendidos, baixar produtos do estoque e implementar reversão completa de vendas canceladas.
 - [x] Na reversão, devolver produtos ao estoque, cancelar parcelas e comissão, cancelar o lançamento financeiro e registrar estorno dos valores recebidos no caixa aberto.
 - [x] Implementar relatório financeiro por período com fluxo de caixa, receitas, despesas, resultado líquido, categorias e pendências.

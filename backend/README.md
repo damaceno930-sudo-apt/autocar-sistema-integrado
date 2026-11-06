@@ -49,6 +49,8 @@ O módulo financeiro exige administrador ou usuário com a permissão `finance`:
 - `DELETE /api/finance/transactions/{id}`: cancelar logicamente um lançamento, mantendo auditoria.
 - `POST /api/inventory/purchase`: registrar compra manual ou importação XML, atualizar estoque e criar conta a pagar vinculada.
 - `GET /api/finance/report?startDate=AAAA-MM-DD&endDate=AAAA-MM-DD`: relatório de fluxo de caixa, receitas/despesas, categorias, pendências e consolidação diária.
+- `GET /api/inventory/movements?limit=100`: histórico de entradas, saídas, devoluções e ajustes físicos.
+- `POST /api/inventory/adjust`: ajustar o saldo físico de um item, registrando motivo, usuário e saldo anterior/novo.
 
 Baixas exigem caixa aberto e criam automaticamente uma movimentação de entrada ou saída vinculada à conta. Todas as operações financeiras importantes geram auditoria no SQLite. O frontend usa esses endpoints na aba Financeiro e na finalização de venda direta, incluindo forma de pagamento e quantidade de parcelas.
 
@@ -59,6 +61,8 @@ As vendas persistem seus itens em `sale_items`. Ao registrar um produto, o saldo
 O relatório considera movimentos reais do caixa para entradas/saídas e lançamentos financeiros não cancelados para receitas/despesas. O frontend permite exportar o resultado localmente em JSON e CSV.
 
 Na aba Relatórios, a opção “Imprimir / salvar PDF” monta um documento A4 com cabeçalho da empresa, período, indicadores, categorias, fluxo diário e contas pendentes. A impressão usa o mecanismo nativo do navegador/Electron; no diálogo do sistema o usuário pode imprimir ou selecionar “Salvar como PDF”, sem Internet ou biblioteca externa.
+
+O estoque registra movimentações em `stock_movements`: entradas de compras/XML, saídas de vendas, devoluções de cancelamentos e ajustes manuais. Cada registro guarda código, quantidade, saldo anterior, saldo resultante, custo, motivo, referência, usuário e data.
 
 ## Backend nativo para instaladores
 
