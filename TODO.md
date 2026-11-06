@@ -15,7 +15,12 @@
 - [x] Funcionários com níveis de acesso por módulo.
 - [x] Importação local de XML de NF-e com leitura de código, descrição, quantidade, unidade e preço para entrada no inventário.
 - [x] Relatórios de vendas por período, serviços prestados, curva ABC, fluxo de caixa, estoque e aniversariantes.
-- [ ] Persistir no backend SQLite os lançamentos financeiros, comissões e vendas diretas com CRUD dedicado; o schema relacional já contém as tabelas `finance_transactions` e `sales`, enquanto a interface financeira atual ainda usa dados demonstrativos.
+- [x] Persistir no backend SQLite os lançamentos financeiros, comissões e vendas diretas com CRUD dedicado; a interface financeira agora consulta e grava dados reais nas tabelas normalizadas.
+- [x] Implementar contas a receber e a pagar com cadastro, vencimento, status, baixa parcial/total e auditoria.
+- [x] Implementar caixa com abertura, saldo inicial, entradas, saídas, sangria, suprimento, fechamento e saldo contado.
+- [x] Integrar venda direta ao financeiro, criando receita, conta a receber para saldo pendente e comissão do vendedor.
+- [ ] Integrar baixa de contas automaticamente ao movimento do caixa, implementar cancelamento/reversão e formas de pagamento por parcela.
+- [ ] Criar CRUD de categorias financeiras e relatórios/exportações financeiras baseados nas consultas SQLite.
 - [x] Persistir em SQLite, via API local, empresa, usuários, permissões, clientes, veículos, estoque, serviços, fornecedores e ordens de serviço, com hidratação do frontend e auditoria.
 - [x] O cadastro de produtos aceita foto local opcional e o catálogo exibe a miniatura sem depender da Internet.
 

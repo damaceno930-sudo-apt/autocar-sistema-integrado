@@ -152,6 +152,33 @@ class Database:
                     id TEXT PRIMARY KEY, kind TEXT, category TEXT, description TEXT, amount REAL DEFAULT 0,
                     status TEXT, due_date TEXT, paid_date TEXT, sale_id TEXT, created_at TEXT
                 );
+                CREATE TABLE IF NOT EXISTS cash_registers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, opened_by INTEGER NOT NULL, opened_at TEXT NOT NULL,
+                    opening_balance REAL NOT NULL DEFAULT 0, closed_by INTEGER, closed_at TEXT,
+                    closing_balance REAL, status TEXT NOT NULL DEFAULT 'open', notes TEXT
+                );
+                CREATE TABLE IF NOT EXISTS cash_movements (
+                    id TEXT PRIMARY KEY, register_id INTEGER NOT NULL, kind TEXT NOT NULL,
+                    description TEXT NOT NULL, amount REAL NOT NULL, payment_method TEXT,
+                    reference_type TEXT, reference_id TEXT, created_by INTEGER NOT NULL, created_at TEXT NOT NULL,
+                    FOREIGN KEY(register_id) REFERENCES cash_registers(id),
+                    FOREIGN KEY(created_by) REFERENCES users(id)
+                );
+                CREATE TABLE IF NOT EXISTS accounts_receivable (
+                    id TEXT PRIMARY KEY, origin TEXT, customer TEXT, client_id INTEGER, description TEXT NOT NULL,
+                    amount REAL NOT NULL, due_date TEXT NOT NULL, payment_method TEXT, status TEXT NOT NULL DEFAULT 'pending',
+                    paid_amount REAL DEFAULT 0, paid_at TEXT, sale_id TEXT, order_id TEXT, created_by INTEGER, created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS accounts_payable (
+                    id TEXT PRIMARY KEY, supplier TEXT, supplier_id INTEGER, description TEXT NOT NULL,
+                    amount REAL NOT NULL, due_date TEXT NOT NULL, payment_method TEXT, status TEXT NOT NULL DEFAULT 'pending',
+                    paid_amount REAL DEFAULT 0, paid_at TEXT, created_by INTEGER, created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS commissions (
+                    id TEXT PRIMARY KEY, sale_id TEXT, seller_id INTEGER NOT NULL, base_amount REAL NOT NULL,
+                    rate REAL NOT NULL DEFAULT 3, amount REAL NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+                    paid_at TEXT, created_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
             """)
             if not self.conn.execute("SELECT 1 FROM migrations WHERE version=1").fetchone():
@@ -161,6 +188,8 @@ class Database:
                 current = {row["key"]: json.loads(row["value"]) for row in self.conn.execute("SELECT key,value FROM app_state")}
                 self.sync_relational(current)
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(2, ?)", (now_iso(),))
+            if not self.conn.execute("SELECT 1 FROM migrations WHERE version=3").fetchone():
+                self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(3, ?)", (now_iso(),))
 
     def seed(self):
         stamp = now_iso()
@@ -200,6 +229,123 @@ class Database:
         if current_user:
             result["currentUser"] = current_user
         return result
+
+    @staticmethod
+    def row_dict(row):
+        return dict(row) if row else None
+
+    def finance_summary(self):
+        register = self.conn.execute("SELECT * FROM cash_registers WHERE status='open' ORDER BY id DESC LIMIT 1").fetchone()
+        register_data = self.row_dict(register)
+        if register_data:
+            movements = self.conn.execute("SELECT COALESCE(SUM(CASE WHEN kind IN ('entry','supply') THEN amount ELSE 0 END),0) AS entries, COALESCE(SUM(CASE WHEN kind IN ('withdrawal','bleed','expense') THEN amount ELSE 0 END),0) AS exits FROM cash_movements WHERE register_id=?", (register["id"],)).fetchone()
+            register_data["current_balance"] = round(register["opening_balance"] + movements["entries"] - movements["exits"], 2)
+        receivable = self.conn.execute("SELECT COALESCE(SUM(amount-paid_amount),0) AS total, COUNT(*) AS count FROM accounts_receivable WHERE status IN ('pending','partial','late')").fetchone()
+        payable = self.conn.execute("SELECT COALESCE(SUM(amount-paid_amount),0) AS total, COUNT(*) AS count FROM accounts_payable WHERE status IN ('pending','partial','late')").fetchone()
+        entries = self.conn.execute("SELECT COALESCE(SUM(amount),0) FROM cash_movements WHERE kind IN ('entry','supply') AND date(created_at)=date('now')").fetchone()[0]
+        exits = self.conn.execute("SELECT COALESCE(SUM(amount),0) FROM cash_movements WHERE kind IN ('withdrawal','bleed','expense') AND date(created_at)=date('now')").fetchone()[0]
+        return {"register": register_data, "receivable_total": round(receivable["total"], 2), "receivable_count": receivable["count"], "payable_total": round(payable["total"], 2), "payable_count": payable["count"], "today_entries": round(entries, 2), "today_exits": round(exits, 2), "today_result": round(entries - exits, 2)}
+
+    def finance_lists(self, limit=100):
+        return {
+            "transactions": [self.row_dict(row) for row in self.conn.execute("SELECT * FROM finance_transactions ORDER BY created_at DESC LIMIT ?", (limit,))],
+            "receivables": [self.row_dict(row) for row in self.conn.execute("SELECT * FROM accounts_receivable ORDER BY due_date, created_at DESC LIMIT ?", (limit,))],
+            "payables": [self.row_dict(row) for row in self.conn.execute("SELECT * FROM accounts_payable ORDER BY due_date, created_at DESC LIMIT ?", (limit,))],
+            "movements": [self.row_dict(row) for row in self.conn.execute("SELECT m.*, r.opened_at FROM cash_movements m JOIN cash_registers r ON r.id=m.register_id ORDER BY m.created_at DESC LIMIT ?", (limit,))],
+            "commissions": [self.row_dict(row) for row in self.conn.execute("SELECT c.*, u.name AS seller_name FROM commissions c LEFT JOIN users u ON u.id=c.seller_id ORDER BY c.created_at DESC LIMIT ?", (limit,))]
+        }
+
+    def finance_create_transaction(self, data, actor):
+        kind = str(data.get("kind", "expense"))
+        amount = float(data.get("amount", 0) or 0)
+        if kind not in ("income", "expense"): raise ValueError("tipo de lançamento inválido")
+        if amount <= 0: raise ValueError("o valor deve ser maior que zero")
+        transaction_id = data.get("id") or f"fin-{secrets.token_hex(8)}"
+        stamp = now_iso()
+        status = str(data.get("status", "pending"))
+        with self.conn:
+            self.conn.execute("INSERT INTO finance_transactions(id,kind,category,description,amount,status,due_date,paid_date,sale_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (transaction_id, kind, data.get("category", "Geral"), data.get("description", "Lançamento manual"), amount, status, data.get("dueDate"), data.get("paidDate"), data.get("saleId"), stamp))
+            self.audit(actor["id"], "create", "finance_transaction", transaction_id)
+        return self.row_dict(self.conn.execute("SELECT * FROM finance_transactions WHERE id=?", (transaction_id,)).fetchone())
+
+    def finance_create_account(self, table, data, actor):
+        amount = float(data.get("amount", 0) or 0)
+        if amount <= 0: raise ValueError("o valor deve ser maior que zero")
+        if not data.get("description") or not data.get("dueDate"): raise ValueError("descrição e vencimento são obrigatórios")
+        account_id = data.get("id") or f"{table[:3]}-{secrets.token_hex(8)}"
+        stamp = now_iso()
+        if table == "accounts_receivable":
+            values = (account_id, data.get("origin", "Manual"), data.get("customer"), data.get("clientId"), data["description"], amount, data["dueDate"], data.get("paymentMethod"), data.get("status", "pending"), 0, None, data.get("saleId"), data.get("orderId"), actor["id"], stamp)
+            sql = "INSERT INTO accounts_receivable(id,origin,customer,client_id,description,amount,due_date,payment_method,status,paid_amount,paid_at,sale_id,order_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        else:
+            values = (account_id, data.get("supplier", "Fornecedor não informado"), data.get("supplierId"), data["description"], amount, data["dueDate"], data.get("paymentMethod"), data.get("status", "pending"), 0, None, actor["id"], stamp)
+            sql = "INSERT INTO accounts_payable(id,supplier,supplier_id,description,amount,due_date,payment_method,status,paid_amount,paid_at,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+        with self.conn:
+            self.conn.execute(sql, values)
+            self.audit(actor["id"], "create", table, account_id)
+        return self.row_dict(self.conn.execute(f"SELECT * FROM {table} WHERE id=?", (account_id,)).fetchone())
+
+    def finance_record_sale(self, data, actor):
+        total = float(data.get("total", 0) or 0)
+        received = float(data.get("received", 0) or 0)
+        if total <= 0: raise ValueError("total da venda inválido")
+        sale_id = data.get("id") or f"sale-{secrets.token_hex(8)}"
+        stamp = now_iso()
+        commission_rate = float(data.get("commissionRate", 3) or 0)
+        commission_amount = round(total * commission_rate / 100, 2)
+        with self.conn:
+            self.conn.execute("INSERT INTO sales(id,sale_type,client_id,total,discount,received,change_value,seller_id,mechanic_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (sale_id, data.get("saleType", "direct"), data.get("clientId"), total, data.get("discount", 0), received, max(0, received - total), data.get("sellerId", actor["id"]), data.get("mechanicId"), stamp))
+            status = "paid" if received >= total else "pending"
+            self.conn.execute("INSERT INTO finance_transactions(id,kind,category,description,amount,status,paid_date,sale_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)", (f"fin-{sale_id}", "income", "Venda", data.get("description", "Venda de produtos e serviços"), total, status, stamp if status == "paid" else None, sale_id, stamp))
+            if received < total:
+                self.conn.execute("INSERT INTO accounts_receivable(id,origin,customer,client_id,description,amount,due_date,payment_method,status,sale_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (f"rec-{sale_id}", "Venda", data.get("customer"), data.get("clientId"), data.get("description", "Venda parcelada"), round(total - received, 2), data.get("dueDate", stamp[:10]), data.get("paymentMethod"), "pending", sale_id, actor["id"], stamp))
+            if data.get("sellerId") and commission_amount > 0:
+                self.conn.execute("INSERT INTO commissions(id,sale_id,seller_id,base_amount,rate,amount,status,created_at) VALUES(?,?,?,?,?,?,?,?)", (f"com-{sale_id}", sale_id, data["sellerId"], total, commission_rate, commission_amount, "pending", stamp))
+            self.audit(actor["id"], "create", "sale", sale_id)
+        return self.row_dict(self.conn.execute("SELECT * FROM sales WHERE id=?", (sale_id,)).fetchone())
+
+    def finance_open_cash(self, data, actor):
+        if self.conn.execute("SELECT 1 FROM cash_registers WHERE status='open'").fetchone(): raise ValueError("já existe um caixa aberto")
+        balance = float(data.get("openingBalance", 0) or 0)
+        if balance < 0: raise ValueError("saldo inicial inválido")
+        with self.conn:
+            cur = self.conn.execute("INSERT INTO cash_registers(opened_by,opened_at,opening_balance,status,notes) VALUES(?,?,?,?,?)", (actor["id"], now_iso(), balance, "open", data.get("notes")))
+            register_id = cur.lastrowid
+            self.audit(actor["id"], "open", "cash_register", str(register_id))
+        return self.row_dict(self.conn.execute("SELECT * FROM cash_registers WHERE id=?", (register_id,)).fetchone())
+
+    def finance_cash_movement(self, data, actor):
+        register = self.conn.execute("SELECT * FROM cash_registers WHERE status='open' ORDER BY id DESC LIMIT 1").fetchone()
+        if not register: raise ValueError("abra o caixa antes de registrar movimentações")
+        amount = float(data.get("amount", 0) or 0)
+        kind = str(data.get("kind", "entry"))
+        if amount <= 0 or kind not in ("entry", "withdrawal", "bleed", "supply", "expense"): raise ValueError("movimentação inválida")
+        movement_id = data.get("id") or f"mov-{secrets.token_hex(8)}"
+        with self.conn:
+            self.conn.execute("INSERT INTO cash_movements(id,register_id,kind,description,amount,payment_method,reference_type,reference_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (movement_id, register["id"], kind, data.get("description", "Movimentação manual"), amount, data.get("paymentMethod"), data.get("referenceType"), data.get("referenceId"), actor["id"], now_iso()))
+            self.audit(actor["id"], "create", "cash_movement", movement_id)
+        return self.row_dict(self.conn.execute("SELECT * FROM cash_movements WHERE id=?", (movement_id,)).fetchone())
+
+    def finance_close_cash(self, data, actor):
+        register = self.conn.execute("SELECT * FROM cash_registers WHERE status='open' ORDER BY id DESC LIMIT 1").fetchone()
+        if not register: raise ValueError("não existe caixa aberto")
+        summary = self.finance_summary()
+        closing = float(data.get("closingBalance", summary["register"]["current_balance"]) or 0)
+        with self.conn:
+            self.conn.execute("UPDATE cash_registers SET closed_by=?,closed_at=?,closing_balance=?,status='closed',notes=COALESCE(?,notes) WHERE id=?", (actor["id"], now_iso(), closing, data.get("notes"), register["id"]))
+            self.audit(actor["id"], "close", "cash_register", str(register["id"]))
+        return self.row_dict(self.conn.execute("SELECT * FROM cash_registers WHERE id=?", (register["id"],)).fetchone())
+
+    def finance_settle(self, table, account_id, data, actor):
+        row = self.conn.execute(f"SELECT * FROM {table} WHERE id=?", (account_id,)).fetchone()
+        if not row: raise ValueError("conta não encontrada")
+        amount = float(data.get("paidAmount", row["amount"]) or 0)
+        if amount <= 0 or amount > row["amount"]: raise ValueError("valor de baixa inválido")
+        status = "paid" if amount >= row["amount"] else "partial"
+        with self.conn:
+            self.conn.execute(f"UPDATE {table} SET paid_amount=?,paid_at=?,status=? WHERE id=?", (amount, now_iso(), status, account_id))
+            self.audit(actor["id"], "settle", table, account_id)
+        return self.row_dict(self.conn.execute(f"SELECT * FROM {table} WHERE id=?", (account_id,)).fetchone())
 
     def sync_relational(self, snapshot: dict, stamp: str | None = None):
         stamp = stamp or now_iso()
@@ -264,6 +410,11 @@ class Database:
             self.sync_relational({"clients": [], "orders": [], "inventory": [], "services": [], "suppliers": []}, stamp)
             self.conn.execute("DELETE FROM sales")
             self.conn.execute("DELETE FROM finance_transactions")
+            self.conn.execute("DELETE FROM cash_movements")
+            self.conn.execute("DELETE FROM cash_registers")
+            self.conn.execute("DELETE FROM accounts_receivable")
+            self.conn.execute("DELETE FROM accounts_payable")
+            self.conn.execute("DELETE FROM commissions")
             self.conn.execute("DELETE FROM users WHERE id != ?", (admin_id,))
             self.audit(admin_id, "clear_data", "system", "limpeza completa mantendo administrador")
 
@@ -301,6 +452,8 @@ class Database:
             self.conn = sqlite3.connect(self.path, check_same_thread=False)
             self.conn.row_factory = sqlite3.Row
             self.conn.execute("PRAGMA foreign_keys = ON")
+            self.conn.execute("PRAGMA journal_mode = WAL")
+            self.initialize()
             if self.conn.execute("SELECT 1 FROM users WHERE id=?", (actor["id"],)).fetchone():
                 self.audit(actor["id"], "import_sqlite", "database", incoming.name)
         finally:
@@ -356,14 +509,52 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(401, {"error": "unauthorized", "message": "Sessão inválida ou expirada."})
         return user
 
+    def require_finance(self):
+        user = self.require_user()
+        if user and not (user["admin"] or "finance" in user.get("permissions", [])):
+            self.send_json(403, {"error": "forbidden", "message": "Seu usuário não possui acesso ao módulo financeiro."})
+            return None
+        return user
+
+    def require_finance_or_sales(self):
+        user = self.require_user()
+        if user and not (user["admin"] or "finance" in user.get("permissions", []) or "sales" in user.get("permissions", [])):
+            self.send_json(403, {"error": "forbidden", "message": "Seu usuário não possui permissão para registrar vendas."})
+            return None
+        return user
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
-            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 1})
+            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 3})
             return
         if parsed.path == "/api/state":
             user = self.require_user()
             if user: self.send_json(200, {"user": user, "state": DB.snapshot(user)})
+            return
+        if parsed.path == "/api/finance/summary":
+            user = self.require_finance()
+            if user: self.send_json(200, {"summary": DB.finance_summary(), **DB.finance_lists()})
+            return
+        if parsed.path == "/api/finance/transactions":
+            user = self.require_finance()
+            if user: self.send_json(200, {"items": DB.finance_lists()["transactions"]})
+            return
+        if parsed.path == "/api/finance/receivables":
+            user = self.require_finance()
+            if user: self.send_json(200, {"items": DB.finance_lists()["receivables"]})
+            return
+        if parsed.path == "/api/finance/payables":
+            user = self.require_finance()
+            if user: self.send_json(200, {"items": DB.finance_lists()["payables"]})
+            return
+        if parsed.path == "/api/finance/cash":
+            user = self.require_finance()
+            if user: self.send_json(200, {"summary": DB.finance_summary(), "items": DB.finance_lists()["movements"]})
+            return
+        if parsed.path == "/api/finance/commissions":
+            user = self.require_finance()
+            if user: self.send_json(200, {"items": DB.finance_lists()["commissions"]})
             return
         if parsed.path == "/api/backup/sqlite":
             user = self.require_user()
@@ -401,6 +592,34 @@ class Handler(BaseHTTPRequestHandler):
                 return
             user = self.require_user()
             if not user: return
+            if parsed.path == "/api/finance/transactions":
+                user = self.require_finance()
+                if user: self.send_json(201, {"item": DB.finance_create_transaction(data, user), "summary": DB.finance_summary()})
+                return
+            if parsed.path == "/api/finance/sales":
+                user = self.require_finance_or_sales()
+                if user: self.send_json(201, {"item": DB.finance_record_sale(data, user), "summary": DB.finance_summary()})
+                return
+            if parsed.path == "/api/finance/receivables":
+                user = self.require_finance()
+                if user: self.send_json(201, {"item": DB.finance_create_account("accounts_receivable", data, user), "summary": DB.finance_summary()})
+                return
+            if parsed.path == "/api/finance/payables":
+                user = self.require_finance()
+                if user: self.send_json(201, {"item": DB.finance_create_account("accounts_payable", data, user), "summary": DB.finance_summary()})
+                return
+            if parsed.path == "/api/finance/cash/open":
+                user = self.require_finance()
+                if user: self.send_json(201, {"item": DB.finance_open_cash(data, user), "summary": DB.finance_summary()})
+                return
+            if parsed.path == "/api/finance/cash/movement":
+                user = self.require_finance()
+                if user: self.send_json(201, {"item": DB.finance_cash_movement(data, user), "summary": DB.finance_summary()})
+                return
+            if parsed.path == "/api/finance/cash/close":
+                user = self.require_finance()
+                if user: self.send_json(200, {"item": DB.finance_close_cash(data, user), "summary": DB.finance_summary()})
+                return
             if parsed.path == "/api/admin/clear":
                 if not user["admin"]: self.send_json(403, {"error": "forbidden"}); return
                 DB.clear_data(user["id"])
@@ -420,6 +639,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/finance/receivables/") or parsed.path.startswith("/api/finance/payables/"):
+            user = self.require_finance()
+            if not user: return
+            try:
+                data = json.loads(body_bytes(self).decode("utf-8"))
+                parts = parsed.path.rstrip("/").split("/")
+                table = "accounts_receivable" if parts[-2] == "receivables" else "accounts_payable"
+                item = DB.finance_settle(table, parts[-1], data, user)
+                self.send_json(200, {"item": item, "summary": DB.finance_summary()})
+            except Exception as exc:
+                self.send_json(400, {"error": "bad_request", "message": str(exc)})
+            return
         if parsed.path != "/api/state":
             self.send_json(404, {"error": "not_found"})
             return

@@ -48,6 +48,12 @@ Preservar a navegação e a hierarquia visual do protótipo, agora com persistê
 - `scripts/build-backend.sh` / `scripts/build-backend.ps1`: compilação opcional do backend nativo por plataforma.
 - `public/manus-routes.json`: manifesto da rota principal para o Preview.
 
+## Fase financeira implementada
+
+O backend agora possui CRUD protegido para lançamentos de receita/despesa, contas a receber, contas a pagar, abertura/movimentação/fechamento de caixa e consulta de comissões. O fechamento e as baixas geram auditoria. A venda direta integrada cria receita, conta a receber quando houver saldo pendente e comissão do vendedor. A interface financeira deixou de usar somente valores demonstrativos e carrega o resumo e as listas do SQLite.
+
+As próximas integrações são: formas de pagamento detalhadas por item e parcela, geração automática de contas a pagar na entrada de compras/XML, baixa com geração de movimento de caixa, reversão/cancelamento financeiro, CRUD de categorias e relatório/exportação financeira.
+
 ## Implementação e entrega
 
 Usar servidor estático local na porta 3000 e backend local na porta 8765. Configurar diagnóstico JavaScript/HTML/CSS, validar sintaxe, verificar o manifesto de rotas, testar autenticação/persistência/backup/limpeza e criar um checkpoint com os arquivos do protótipo e do backend. Para instaladores sem Python no computador do usuário, compilar o backend com PyInstaller no mesmo sistema operacional/arquitetura antes do empacotamento.
