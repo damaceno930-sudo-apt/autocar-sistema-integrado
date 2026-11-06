@@ -173,7 +173,7 @@ class Database:
                 CREATE TABLE IF NOT EXISTS accounts_payable (
                     id TEXT PRIMARY KEY, supplier TEXT, supplier_id INTEGER, description TEXT NOT NULL,
                     amount REAL NOT NULL, due_date TEXT NOT NULL, payment_method TEXT, status TEXT NOT NULL DEFAULT 'pending',
-                    paid_amount REAL DEFAULT 0, paid_at TEXT, created_by INTEGER, created_at TEXT NOT NULL
+                    paid_amount REAL DEFAULT 0, paid_at TEXT, created_by INTEGER, created_at TEXT NOT NULL, purchase_id TEXT
                 );
                 CREATE TABLE IF NOT EXISTS commissions (
                     id TEXT PRIMARY KEY, sale_id TEXT, seller_id INTEGER NOT NULL, base_amount REAL NOT NULL,
@@ -184,6 +184,10 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, kind TEXT NOT NULL,
                     active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS stock_purchases (
+                    id TEXT PRIMARY KEY, document_number TEXT UNIQUE, supplier TEXT, total REAL NOT NULL,
+                    due_date TEXT, payment_method TEXT, payable_id TEXT, created_by INTEGER NOT NULL, created_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
             """)
             for column, definition in (("installment_number", "INTEGER DEFAULT 1"), ("total_installments", "INTEGER DEFAULT 1")):
@@ -191,6 +195,10 @@ class Database:
                     self.conn.execute(f"ALTER TABLE accounts_receivable ADD COLUMN {column} {definition}")
                 except sqlite3.OperationalError:
                     pass
+            try:
+                self.conn.execute("ALTER TABLE accounts_payable ADD COLUMN purchase_id TEXT")
+            except sqlite3.OperationalError:
+                pass
             if not self.conn.execute("SELECT 1 FROM migrations WHERE version=1").fetchone():
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(1, ?)", (now_iso(),))
                 self.seed()
@@ -204,6 +212,8 @@ class Database:
                 for name, kind in (("Venda", "income"), ("Serviços", "income"), ("Peças", "income"), ("Compras", "expense"), ("Despesas fixas", "expense"), ("Impostos", "expense"), ("Folha", "expense")):
                     self.conn.execute("INSERT OR IGNORE INTO finance_categories(name,kind,created_at) VALUES(?,?,?)", (name, kind, now_iso()))
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(4, ?)", (now_iso(),))
+            if not self.conn.execute("SELECT 1 FROM migrations WHERE version=5").fetchone():
+                self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(5, ?)", (now_iso(),))
 
     def seed(self):
         stamp = now_iso()
@@ -308,6 +318,39 @@ class Database:
             self.conn.execute(sql, values)
             self.audit(actor["id"], "create", table, account_id)
         return self.row_dict(self.conn.execute(f"SELECT * FROM {table} WHERE id=?", (account_id,)).fetchone())
+
+    def stock_purchase(self, data, actor):
+        items = data.get("items") or []
+        supplier = str(data.get("supplier", "Fornecedor não informado")).strip()
+        document = str(data.get("documentNumber", "")).strip() or None
+        if not items: raise ValueError("a compra precisa conter pelo menos um item")
+        if document and self.conn.execute("SELECT 1 FROM stock_purchases WHERE document_number=?", (document,)).fetchone(): raise ValueError(f"o documento {document} já foi importado")
+        calculated_total = round(sum(float(item.get("quantity", 0) or 0) * float(item.get("unitCost", 0) or 0) for item in items), 2)
+        invoice_total = float(data.get("invoiceTotal", 0) or 0)
+        total = round(invoice_total if invoice_total > 0 else calculated_total, 2)
+        if total <= 0: raise ValueError("o total da compra deve ser maior que zero")
+        purchase_id = f"purchase-{secrets.token_hex(8)}"
+        payable_id = f"pay-{purchase_id}"
+        stamp = now_iso()
+        due_date = data.get("dueDate") or stamp[:10]
+        payment_method = data.get("paymentMethod") or "Boleto"
+        with self.conn:
+            for item in items:
+                code = str(item.get("code", "")).strip().upper()
+                name = str(item.get("name", "")).strip()
+                quantity = float(item.get("quantity", 0) or 0)
+                unit_cost = float(item.get("unitCost", 0) or 0)
+                if not code or not name or quantity <= 0 or unit_cost < 0: raise ValueError("item de compra inválido")
+                existing = self.conn.execute("SELECT id FROM stock_items WHERE code=?", (code,)).fetchone()
+                if existing:
+                    self.conn.execute("UPDATE stock_items SET stock=stock+?,cost=?,supplier=COALESCE(?,supplier),name=?,category=COALESCE(?,category),brand=COALESCE(?,brand),unit=COALESCE(?,unit),price=COALESCE(?,price) WHERE code=?", (quantity, unit_cost, supplier, name, item.get("category"), item.get("brand"), item.get("unit"), item.get("price"), code))
+                else:
+                    self.conn.execute("INSERT INTO stock_items(name,code,category,brand,stock,min_stock,max_stock,unit,price,cost,location,supplier,photo) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (name, code, item.get("category", "Importados"), item.get("brand", "Não informada"), quantity, item.get("min", 0), item.get("max", quantity), item.get("unit", "un."), item.get("price", unit_cost), unit_cost, item.get("location", "Entrada de compra"), supplier, item.get("photo")))
+            self.conn.execute("INSERT INTO stock_purchases(id,document_number,supplier,total,due_date,payment_method,payable_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?)", (purchase_id, document, supplier, total, due_date, payment_method, payable_id, actor["id"], stamp))
+            self.conn.execute("INSERT INTO accounts_payable(id,supplier,description,amount,due_date,payment_method,status,paid_amount,created_by,created_at,purchase_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (payable_id, supplier, f"Compra de estoque{f' • NF {document}' if document else ''}", total, due_date, payment_method, "pending", 0, actor["id"], stamp, purchase_id))
+            self.conn.execute("INSERT INTO finance_transactions(id,kind,category,description,amount,status,due_date,created_at) VALUES(?,?,?,?,?,?,?,?)", (f"fin-{purchase_id}", "expense", "Compras", f"Compra de estoque • {supplier}", total, "pending", due_date, stamp))
+            self.audit(actor["id"], "create", "stock_purchase", purchase_id)
+        return {"purchase": self.row_dict(self.conn.execute("SELECT * FROM stock_purchases WHERE id=?", (purchase_id,)).fetchone()), "payable": self.row_dict(self.conn.execute("SELECT * FROM accounts_payable WHERE id=?", (payable_id,)).fetchone())}
 
     def finance_record_sale(self, data, actor):
         total = float(data.get("total", 0) or 0)
@@ -458,6 +501,7 @@ class Database:
             self.conn.execute("DELETE FROM accounts_receivable")
             self.conn.execute("DELETE FROM accounts_payable")
             self.conn.execute("DELETE FROM commissions")
+            self.conn.execute("DELETE FROM stock_purchases")
             self.conn.execute("DELETE FROM users WHERE id != ?", (admin_id,))
             self.audit(admin_id, "clear_data", "system", "limpeza completa mantendo administrador")
 
@@ -566,10 +610,17 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return user
 
+    def require_inventory(self):
+        user = self.require_user()
+        if user and not (user["admin"] or "inventory" in user.get("permissions", [])):
+            self.send_json(403, {"error": "forbidden", "message": "Seu usuário não possui permissão para lançar entradas no estoque."})
+            return None
+        return user
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
-            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 4})
+            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 5})
             return
         if parsed.path == "/api/state":
             user = self.require_user()
@@ -650,6 +701,10 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/finance/categories":
                 user = self.require_finance()
                 if user: self.send_json(201, {"item": DB.finance_create_category(data, user), "categories": DB.finance_lists()["categories"]})
+                return
+            if parsed.path == "/api/inventory/purchase":
+                user = self.require_inventory()
+                if user: self.send_json(201, DB.stock_purchase(data, user))
                 return
             if parsed.path == "/api/finance/receivables":
                 user = self.require_finance()

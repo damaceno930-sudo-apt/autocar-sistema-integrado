@@ -46,8 +46,11 @@ O módulo financeiro exige administrador ou usuário com a permissão `finance`:
 - `POST /api/finance/sales`: registrar venda, receita pendente, parcelas, conta a receber e comissão;
 - `GET/POST /api/finance/categories`: consultar e cadastrar categorias de receita/despesa;
 - `DELETE /api/finance/transactions/{id}`: cancelar logicamente um lançamento, mantendo auditoria.
+- `POST /api/inventory/purchase`: registrar compra manual ou importação XML, atualizar estoque e criar conta a pagar vinculada.
 
 Baixas exigem caixa aberto e criam automaticamente uma movimentação de entrada ou saída vinculada à conta. Todas as operações financeiras importantes geram auditoria no SQLite. O frontend usa esses endpoints na aba Financeiro e na finalização de venda direta, incluindo forma de pagamento e quantidade de parcelas.
+
+Entradas de compra aceitam `supplier`, `documentNumber`, `dueDate`, `paymentMethod` e uma lista de `items` com código, quantidade e custo unitário. O número do documento é único para impedir a importação duplicada da mesma NF-e.
 
 ## Backend nativo para instaladores
 

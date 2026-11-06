@@ -404,6 +404,35 @@ function syncPermissionSelection() {
   document.getElementById('select-all-permissions').disabled = isAdmin;
 }
 
+async function registerStockPurchase(data, localItem) {
+  if (!backendOnline) return;
+  const result = await apiRequest('/inventory/purchase', { method: 'POST', body: data });
+  if (localItem) state.inventory.push(localItem);
+  await apiRequest('/state', { method: 'PUT', body: state });
+  return result;
+}
+
+async function importXmlPurchase(file) {
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const doc = new DOMParser().parseFromString(String(reader.result), 'application/xml');
+    const text = (node, tag) => node?.getElementsByTagName(tag)[0]?.textContent?.trim() || '';
+    const details = [...doc.getElementsByTagName('det')];
+    const supplier = text(doc, 'xNome') || 'NF-e importada';
+    const documentNumber = text(doc, 'nNF');
+    const invoiceTotal = Number(text(doc, 'vNF')) || 0;
+    const items = details.map((detail) => ({ code: text(detail, 'cProd'), name: text(detail, 'xProd'), quantity: Number(text(detail, 'qCom')) || 0, unitCost: Number(text(detail, 'vUnCom')) || 0, unit: text(detail, 'uCom') || 'un.', category: 'Importado XML', brand: 'Não informada', price: Number(text(detail, 'vUnCom')) || 0, location: 'Entrada XML', supplier })).filter((item) => item.code && item.name && item.quantity > 0);
+    if (!items.length) { showToast('A NF-e não contém itens reconhecíveis.', 'error'); return; }
+    try {
+      if (backendOnline) await apiRequest('/inventory/purchase', { method: 'POST', body: { supplier, documentNumber, dueDate: new Date().toISOString().slice(0, 10), paymentMethod: 'Boleto', invoiceTotal, items } });
+      items.forEach((incoming) => { const item = state.inventory.find((entry) => entry.code === incoming.code); if (item) { item.stock += incoming.quantity; item.cost = incoming.unitCost; item.supplier = supplier; } else state.inventory.push({ ...incoming, stock: incoming.quantity, min: 0, max: incoming.quantity }); });
+      if (backendOnline) await apiRequest('/state', { method: 'PUT', body: state });
+      renderView(); showToast(`XML processado: ${items.length} itens lançados e conta a pagar criada.`);
+    } catch (error) { showToast(error.message, 'error'); }
+  };
+  reader.readAsText(file);
+}
+
 function bindEvents() {
   document.addEventListener('click', (event) => {
     const nav = event.target.closest('[data-view]');
@@ -535,13 +564,13 @@ function bindEvents() {
     } catch (error) { showToast(error.message, 'error'); }
   });
   document.addEventListener('change', (event) => { if (event.target.id === 'import-data-file') { importDataFile(event.target.files?.[0]); event.target.value = ''; } });
-  document.addEventListener('change', (event) => { if (event.target.id === 'xml-import-file') { const file = event.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => { const doc = new DOMParser().parseFromString(String(reader.result), 'application/xml'); const details = [...doc.getElementsByTagName('det')]; const text = (node, tag) => node.getElementsByTagName(tag)[0]?.textContent?.trim() || ''; let imported = 0; details.forEach((detail) => { const code = text(detail, 'cProd'); const name = text(detail, 'xProd'); if (!code || !name) return; const item = state.inventory.find((entry) => entry.code === code); const quantity = Number(text(detail, 'qCom')) || 0; const price = Number(text(detail, 'vUnCom')) || 0; if (item) { item.stock += quantity; if (price) item.cost = price; } else { state.inventory.push({ name, code, category: 'Importado XML', brand: 'Não informada', stock: quantity, min: 0, max: quantity, unit: text(detail, 'uCom') || 'un.', price: price, cost: price, location: 'Entrada XML', supplier: 'NF-e importada' }); } imported += 1; }); renderView(); showToast(`XML processado: ${imported} itens lançados no inventário.`); }; reader.readAsText(file); event.target.value = ''; } } });
-  document.getElementById('new-stock-form').addEventListener('submit', (event) => {
+  document.addEventListener('change', (event) => { if (event.target.id === 'xml-import-file') { const file = event.target.files?.[0]; if (file) { importXmlPurchase(file); event.target.value = ''; } } });
+  document.getElementById('new-stock-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
     const code = String(data.get('code')).trim().toUpperCase();
     if (state.inventory.some((item) => item.code.toUpperCase() === code)) { showToast('Este código de item já está cadastrado.', 'error'); return; }
-    const saveItem = (photo = '') => { state.inventory.push({ name: data.get('name'), code, category: data.get('category'), brand: data.get('brand') || 'Não informada', photo, stock: Number(data.get('stock')), min: Number(data.get('min')), max: Number(data.get('max')), unit: data.get('unit'), price: Number(data.get('price')), cost: Number(data.get('cost')), location: data.get('location'), supplier: data.get('supplier') || 'Não informado' }); event.target.reset(); closeStockModal(); state.view = 'inventory'; renderView(); showToast('Item cadastrado no estoque local.'); };
+    const saveItem = async (photo = '') => { const localItem = { name: data.get('name'), code, category: data.get('category'), brand: data.get('brand') || 'Não informada', photo, stock: Number(data.get('stock')), min: Number(data.get('min')), max: Number(data.get('max')), unit: data.get('unit'), price: Number(data.get('price')), cost: Number(data.get('cost')), location: data.get('location'), supplier: data.get('supplier') || 'Não informado' }; try { if (backendOnline) await registerStockPurchase({ supplier: localItem.supplier, documentNumber: data.get('documentNumber'), dueDate: data.get('dueDate'), paymentMethod: data.get('paymentMethod'), items: [{ ...localItem, quantity: localItem.stock, unitCost: localItem.cost }] }, localItem); else state.inventory.push(localItem); event.target.reset(); closeStockModal(); state.view = 'inventory'; renderView(); showToast(backendOnline ? 'Item lançado no estoque e conta a pagar criada.' : 'Item cadastrado no estoque local.'); } catch (error) { showToast(error.message, 'error'); } };
     const photo = data.get('photo');
     if (photo?.size) { const reader = new FileReader(); reader.onload = () => saveItem(String(reader.result)); reader.readAsDataURL(photo); } else saveItem();
   });

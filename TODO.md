@@ -22,7 +22,9 @@
 - [x] Integrar baixa de contas automaticamente ao movimento do caixa aberto, com entrada para recebimentos e saída para pagamentos.
 - [x] Implementar cancelamento lógico auditado de lançamentos e formas de pagamento com parcelamento nas vendas.
 - [x] Criar CRUD inicial de categorias financeiras persistentes.
-- [ ] Gerar contas a pagar a partir das compras e da importação XML, implementar reversão completa de vendas canceladas e relatórios/exportações financeiras.
+- [x] Gerar conta a pagar automaticamente a partir de entrada manual de estoque e importação XML/NF-e, vinculando fornecedor, documento, vencimento e forma de pagamento.
+- [x] Impedir a importação duplicada da mesma NF/documento de compra.
+- [ ] Implementar reversão completa de vendas canceladas e relatórios/exportações financeiras.
 - [x] Persistir em SQLite, via API local, empresa, usuários, permissões, clientes, veículos, estoque, serviços, fornecedores e ordens de serviço, com hidratação do frontend e auditoria.
 - [x] O cadastro de produtos aceita foto local opcional e o catálogo exibe a miniatura sem depender da Internet.
 

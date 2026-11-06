@@ -52,7 +52,7 @@ Preservar a navegação e a hierarquia visual do protótipo, agora com persistê
 
 O backend agora possui CRUD protegido para lançamentos de receita/despesa, contas a receber, contas a pagar, abertura/movimentação/fechamento de caixa e consulta de comissões. O fechamento e as baixas geram auditoria. A venda direta integrada cria receita, conta a receber quando houver saldo pendente e comissão do vendedor. A interface financeira deixou de usar somente valores demonstrativos e carrega o resumo e as listas do SQLite.
 
-Na segunda fase foram adicionados: formas de pagamento e parcelas nas vendas, baixa com geração automática de movimento no caixa aberto, cancelamento lógico auditado de lançamentos e CRUD de categorias financeiras. A próxima integração operacional é gerar contas a pagar a partir de compras/XML, além dos relatórios/exportações financeiras e reversões completas de vendas canceladas.
+Na segunda fase foram adicionados: formas de pagamento e parcelas nas vendas, baixa com geração automática de movimento no caixa aberto, cancelamento lógico auditado de lançamentos e CRUD de categorias financeiras. A entrada manual de estoque e a importação XML/NF-e agora usam a operação de compra persistente, atualizam o saldo, registram fornecedor/documento e geram conta a pagar. Permanecem relatórios/exportações financeiras e reversões completas de vendas canceladas.
 
 ## Implementação e entrega
 
