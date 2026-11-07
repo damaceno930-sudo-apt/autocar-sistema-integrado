@@ -26,6 +26,7 @@
 - [x] Impedir a importação duplicada da mesma NF/documento de compra.
 - [x] Persistir histórico de entradas, saídas, devoluções e ajustes de estoque com saldo anterior/resultante, motivo, referência e auditoria.
 - [x] Conectar o ajuste físico de inventário ao SQLite e exibir o histórico real no módulo de estoque.
+- [x] Implementar conferência de inventário físico em lote, com cálculo automático de divergências, ajuste transacional dos saldos e auditoria por sessão.
 - [x] Implementar relatório de estoque por período com entradas, consumo, ajustes, valor armazenado, giro, cobertura e curva ABC.
 - [x] Permitir exportação local do relatório de estoque em JSON e CSV.
 - [x] Implementar impressão A4 do relatório de estoque com cabeçalho da empresa e opção nativa de salvar como PDF.

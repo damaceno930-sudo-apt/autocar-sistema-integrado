@@ -51,6 +51,7 @@ O módulo financeiro exige administrador ou usuário com a permissão `finance`:
 - `GET /api/finance/report?startDate=AAAA-MM-DD&endDate=AAAA-MM-DD`: relatório de fluxo de caixa, receitas/despesas, categorias, pendências e consolidação diária.
 - `GET /api/inventory/movements?limit=100`: histórico de entradas, saídas, devoluções e ajustes físicos.
 - `POST /api/inventory/adjust`: ajustar o saldo físico de um item, registrando motivo, usuário e saldo anterior/novo.
+- `POST /api/inventory/physical-count`: conferir vários itens em lote, calcular divergências e ajustar automaticamente os saldos, criando uma movimentação auditada para cada item alterado.
 - `GET /api/inventory/report?startDate=AAAA-MM-DD&endDate=AAAA-MM-DD`: relatório de entradas, consumo, ajustes, valor armazenado, giro, cobertura e curva ABC.
 
 Baixas exigem caixa aberto e criam automaticamente uma movimentação de entrada ou saída vinculada à conta. Todas as operações financeiras importantes geram auditoria no SQLite. O frontend usa esses endpoints na aba Financeiro e na finalização de venda direta, incluindo forma de pagamento e quantidade de parcelas.
@@ -64,6 +65,8 @@ O relatório considera movimentos reais do caixa para entradas/saídas e lançam
 Na aba Relatórios, a opção “Imprimir / salvar PDF” monta um documento A4 com cabeçalho da empresa, período, indicadores, categorias, fluxo diário e contas pendentes. A impressão usa o mecanismo nativo do navegador/Electron; no diálogo do sistema o usuário pode imprimir ou selecionar “Salvar como PDF”, sem Internet ou biblioteca externa.
 
 O estoque registra movimentações em `stock_movements`: entradas de compras/XML, saídas de vendas, devoluções de cancelamentos e ajustes manuais. Cada registro guarda código, quantidade, saldo anterior, saldo resultante, custo, motivo, referência, usuário e data.
+
+O inventário físico em lote usa uma única sessão identificada, valida todos os códigos e contagens dentro de uma transação SQLite e só registra divergências reais. Itens sem diferença permanecem sem nova movimentação; cada ajuste guarda a sessão, o motivo, o usuário e os saldos anterior/resultante.
 
 O relatório classifica os itens pela participação acumulada no valor consumido: classe A até o primeiro grupo que atinge 80%, classe B até 95% e classe C no restante. O giro é calculado como consumo dividido pelo estoque médio observado; a cobertura estima quantos dias o saldo atual atende ao consumo médio do período.
 

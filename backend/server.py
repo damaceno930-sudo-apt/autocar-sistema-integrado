@@ -385,6 +385,25 @@ class Database:
             self.audit(actor["id"], "adjust", "stock_item", f"{code} • {previous} → {new_stock}")
         return self.row_dict(self.conn.execute("SELECT * FROM stock_movements WHERE id=?", (movement_id,)).fetchone())
 
+    def stock_physical_count(self, data, actor):
+        counts = data.get("items") or []; reason = str(data.get("reason") or "Inventário físico").strip(); session_id = f"inv-{secrets.token_hex(8)}"
+        if not counts: raise ValueError("informe pelo menos um item para a conferência")
+        stamp = now_iso(); adjusted = []; total_variance = 0
+        with self.conn:
+            for entry in counts:
+                code = str(entry.get("code", "")).strip().upper(); counted = float(entry.get("count", -1))
+                if not code or counted < 0: raise ValueError("contagem física inválida")
+                item = self.conn.execute("SELECT * FROM stock_items WHERE code=?", (code,)).fetchone()
+                if not item: raise ValueError(f"item não encontrado: {code}")
+                previous = float(item["stock"] or 0); variance = round(counted - previous, 4)
+                if abs(variance) < 0.0001: continue
+                self.conn.execute("UPDATE stock_items SET stock=? WHERE code=?", (counted, code))
+                movement_id = self.record_stock_movement(code, "adjustment", variance, previous, counted, item["cost"], reason, "physical_count", session_id, actor["id"], stamp)
+                adjusted.append({"movementId": movement_id, "code": code, "name": item["name"], "previous": previous, "counted": counted, "variance": variance})
+                total_variance += variance
+            self.audit(actor["id"], "physical_count", "stock", f"{session_id} • {len(adjusted)} ajustes")
+        return {"sessionId": session_id, "checked": len(counts), "adjusted": len(adjusted), "totalVariance": round(total_variance, 4), "items": adjusted}
+
     def finance_create_category(self, data, actor):
         name = str(data.get("name", "")).strip()
         kind = str(data.get("kind", "expense"))
@@ -893,6 +912,10 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/inventory/adjust":
                 user = self.require_inventory()
                 if user: self.send_json(200, {"item": DB.stock_adjust(data, user), "movements": DB.stock_movements()})
+                return
+            if parsed.path == "/api/inventory/physical-count":
+                user = self.require_inventory()
+                if user: self.send_json(200, {"result": DB.stock_physical_count(data, user), "movements": DB.stock_movements()})
                 return
             if parsed.path == "/api/finance/receivables":
                 user = self.require_finance()
