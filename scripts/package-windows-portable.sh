@@ -8,6 +8,11 @@ command -v npx >/dev/null 2>&1 || { echo "Erro: npx não encontrado." >&2; exit 
 VERSION="$(node -p "require('./package.json').version")"
 PRODUCT_NAME="AutoCar Sistema Integrado"
 
+if [[ ! -f backend/bin/autocar-backend.exe ]]; then
+  echo "Backend Windows nativo ausente. Execute scripts/build-backend.ps1 em uma máquina Windows x64 antes do empacotamento." >&2
+  exit 1
+fi
+
 npx electron-packager . "$PRODUCT_NAME" \
   --platform=win32 \
   --arch=x64 \

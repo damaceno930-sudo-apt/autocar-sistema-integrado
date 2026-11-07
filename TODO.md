@@ -47,7 +47,8 @@
 - [x] O `package.json` fixa Electron, electron-builder e `@electron/packager`, com alvos Windows e Linux; o `.deb` é montado por `dpkg-deb`.
 - [x] A documentação explica requisitos, comandos, artefatos e o backend local em `backend/README.md`.
 - [x] O Electron inicia e encerra o backend Python local e guarda o banco no diretório de dados do usuário; há fallback para Python instalado e suporte a executável nativo compilado.
-- [ ] Gerar e validar o executável nativo do backend para Linux ARM64 e Windows x64 no mesmo sistema operacional/arquitetura de cada instalador.
+- [x] Gerar e validar o executável nativo do backend para Linux ARM64 no Ubuntu ARM64, incluindo execução do binário e resposta do endpoint de saúde.
+- [ ] Gerar e validar o executável nativo do backend para Windows x64 em uma máquina Windows x64; o script PowerShell e o empacotamento já recusam arquiteturas ou binários ausentes.
 
 ## Instalação offline para testes
 

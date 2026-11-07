@@ -68,6 +68,12 @@ O estoque registra movimentações em `stock_movements`: entradas de compras/XML
 
 O inventário físico em lote usa uma única sessão identificada, valida todos os códigos e contagens dentro de uma transação SQLite e só registra divergências reais. Itens sem diferença permanecem sem nova movimentação; cada ajuste guarda a sessão, o motivo, o usuário e os saldos anterior/resultante.
 
+## Builds nativos do backend
+
+No Ubuntu ARM64, execute `./scripts/build-backend.sh`. O script usa PyInstaller, valida que o resultado é ELF ARM aarch64 e grava `backend/bin/autocar-backend`. O pacote Linux é reconstruído com `npm run package:linux`; o backend pode ser validado isoladamente com `AUTOCAR_PORT=8877 AUTOCAR_DATA_DIR=/tmp/autocar-native backend/bin/autocar-backend` e consulta a `/api/health`.
+
+O executável Windows x64 precisa ser compilado em uma máquina Windows x64, pois PyInstaller não produz um binário Windows x64 nativo a partir deste host Linux ARM64. Nessa máquina, instale PyInstaller e execute `powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1`; depois rode `npm run package:windows` ou o script portátil. O empacotamento agora recusa continuar quando `backend/bin/autocar-backend.exe` não existe.
+
 O relatório classifica os itens pela participação acumulada no valor consumido: classe A até o primeiro grupo que atinge 80%, classe B até 95% e classe C no restante. O giro é calculado como consumo dividido pelo estoque médio observado; a cobertura estima quantos dias o saldo atual atende ao consumo médio do período.
 
 Na tela do relatório de estoque, “Imprimir / salvar PDF” gera um documento A4 com cabeçalho da empresa, período, indicadores, curva ABC, giro, cobertura e movimentação diária. A saída usa `window.print()` e o diálogo nativo do Electron/navegador, permitindo imprimir ou selecionar “Salvar como PDF” sem Internet.
