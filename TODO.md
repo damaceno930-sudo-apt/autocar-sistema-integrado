@@ -59,7 +59,7 @@
 - [ ] Validar instalação física em Windows 7, Windows 8, Windows 10/11 e Ubuntu 24; a CI Windows x86/x64 e Ubuntu 24 já passou, mas a sandbox não substitui essas máquinas. Python 3.11 do backend não executaria em Windows 7, então os builds Windows usam Python 3.8.10; ainda falta validar o executável resultante no próprio Windows 7.
 - [x] Foi gerado um executável Windows x64 portátil real com o runtime Electron embutido.
 - [x] A pasta portátil foi compactada em ZIP para extração simples pelo usuário.
-- [ ] Confirmar que a CI publica os dois alvos Windows, NSIS e portable, para x86/x64 com nomes distintos; a primeira execução sobrescreveu um dos `.exe`. A instalação física também segue pendente.
+- [x] CI 44169696660 publicou com nomes distintos os alvos Windows NSIS e portable para x86/x64. A instalação física segue pendente.
 
 ## Melhorias recentes deste ciclo
 
@@ -70,7 +70,7 @@
 - [x] Permissões CORS por allowlist, expiração de token, limitação de tentativas de login e serialização das operações SQLite concorrentes.
 - [x] Seed de produção sem cadastros de demonstração e senha administradora exclusiva configurada pelo operador.
 - [x] Testes de integração HTTP/SQLite para venda, comprovante, inventário, rollback e CORS.
-- [x] Workflows de CI para testes e builds Windows x86/x64 e Ubuntu 24 x64; execução 44166174459 aprovada e artefatos disponíveis no GitHub Actions. Actions oficiais atualizadas para os majors v7 compatíveis com Node 24.
+- [x] Workflows de CI para testes e builds Windows x86/x64 e Ubuntu 24 x64; execução 44169696660 aprovada e artefatos disponíveis no GitHub Actions. Actions oficiais atualizadas para os majors v7 compatíveis com Node 24.
 - [x] Templates de deployment com systemd, Nginx/HTTPS e backup SQLite.
 - [ ] Publicar e validar numa VPS real, testar instalação em máquinas Windows/Ubuntu físicas e conferir firewall/restore; exige domínio, credenciais e hosts externos ao repositório.
 - [ ] Implementar conexão remota nos instaladores Electron somente após upgrade do runtime para uma versão suportada e revisão do requisito Windows 7; o runtime Electron 22 deve ficar offline/local. Clientes remotos funcionam pela interface HTTPS em navegador moderno.
