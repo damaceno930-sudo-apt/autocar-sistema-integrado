@@ -58,12 +58,16 @@
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
+      "artifactName": "${productName}-${version}-${os}-${arch}-setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "AutoCar Sistema Integrado"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${os}-${arch}-portable.${ext}"
     },
     "linux": {
       "target": [

@@ -59,7 +59,7 @@
 - [ ] Validar instalação física em Windows 7, Windows 8, Windows 10/11 e Ubuntu 24; a CI Windows x86/x64 e Ubuntu 24 já passou, mas a sandbox não substitui essas máquinas. Python 3.11 do backend não executaria em Windows 7, então os builds Windows usam Python 3.8.10; ainda falta validar o executável resultante no próprio Windows 7.
 - [x] Foi gerado um executável Windows x64 portátil real com o runtime Electron embutido.
 - [x] A pasta portátil foi compactada em ZIP para extração simples pelo usuário.
-- [x] Gerar instaladores NSIS/portáteis Windows x86/x64 em runner Windows; os executáveis passaram pelo teste de fumaça e foram publicados como artifacts da CI. A instalação física segue pendente.
+- [ ] Confirmar que a CI publica os dois alvos Windows, NSIS e portable, para x86/x64 com nomes distintos; a primeira execução sobrescreveu um dos `.exe`. A instalação física também segue pendente.
 
 ## Melhorias recentes deste ciclo
 
