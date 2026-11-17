@@ -17,7 +17,8 @@ A API fica em `http://127.0.0.1:8765` e o banco padrão em `~/.autocar-sistema/a
 - SQLite com tabelas normalizadas de usuários, clientes, veículos, estoque, catálogo de serviços, ordens, vendas, financeiro, fornecedores e auditoria;
 - snapshot operacional compatível com o estado do frontend, permitindo persistir alterações sem conexão externa;
 - backup binário SQLite e backup JSON, restauração administrativa, limpeza completa mantendo o administrador;
-- CORS restrito ao uso local e cabeçalho `X-AutoCar-Token` para as chamadas do frontend.
+- CORS com allowlist exata (`AUTOCAR_ALLOWED_ORIGINS`), tokens de sessão com validade limitada e limitação de tentativas de login (considera o IP encaminhado apenas quando o peer é loopback, para integração segura com Nginx);
+- seed de produção sem registros demonstrativos e com senha inicial única definida por `AUTOCAR_ADMIN_PASSWORD`.
 
 ## Endpoints principais
 
@@ -43,7 +44,8 @@ O módulo financeiro exige administrador ou usuário com a permissão `finance`:
 - `POST /api/finance/cash/open`: abrir caixa;
 - `POST /api/finance/cash/movement`: registrar entrada, saída, sangria ou suprimento;
 - `POST /api/finance/cash/close`: fechar caixa com saldo contado;
-- `POST /api/finance/sales`: registrar venda, receita pendente, parcelas, conta a receber e comissão;
+- `POST /api/finance/sales`: registrar venda, receita pendente, parcelas, conta a receber e comissão; a resposta inclui o comprovante vinculado ao ID salvo;
+- `GET /api/finance/sales/{id}`: reconsultar comprovante persistido, itens, pagamento e parcelas;
 - `POST /api/finance/sales/{id}/cancel`: cancelar e reverter venda, estoque, parcelas, comissão e valores recebidos;
 - `GET/POST /api/finance/categories`: consultar e cadastrar categorias de receita/despesa;
 - `DELETE /api/finance/transactions/{id}`: cancelar logicamente um lançamento, mantendo auditoria.
@@ -51,7 +53,8 @@ O módulo financeiro exige administrador ou usuário com a permissão `finance`:
 - `GET /api/finance/report?startDate=AAAA-MM-DD&endDate=AAAA-MM-DD`: relatório de fluxo de caixa, receitas/despesas, categorias, pendências e consolidação diária.
 - `GET /api/inventory/movements?limit=100`: histórico de entradas, saídas, devoluções e ajustes físicos.
 - `POST /api/inventory/adjust`: ajustar o saldo físico de um item, registrando motivo, usuário e saldo anterior/novo.
-- `POST /api/inventory/physical-count`: conferir vários itens em lote, calcular divergências e ajustar automaticamente os saldos, criando uma movimentação auditada para cada item alterado.
+- `POST /api/inventory/physical-count`: conferir vários itens em lote, calcular divergências e ajustar automaticamente os saldos, criando uma movimentação auditada para cada item alterado; cada item e a sessão completa são persistidos.
+- `GET /api/inventory/physical-count/{sessionId}`: recuperar comprovante de inventário com saldos, diferenças, valores e responsável.
 - `GET /api/inventory/report?startDate=AAAA-MM-DD&endDate=AAAA-MM-DD`: relatório de entradas, consumo, ajustes, valor armazenado, giro, cobertura e curva ABC.
 
 Baixas exigem caixa aberto e criam automaticamente uma movimentação de entrada ou saída vinculada à conta. Todas as operações financeiras importantes geram auditoria no SQLite. O frontend usa esses endpoints na aba Financeiro e na finalização de venda direta, incluindo forma de pagamento e quantidade de parcelas.
@@ -89,3 +92,9 @@ npm run package:linux
 ```
 
 No Windows, use `scripts/build-backend.ps1` em um ambiente Windows e depois `npm run package:windows`. O Electron procura primeiro `backend/bin/autocar-backend` ou `autocar-backend.exe`; se não encontrar, usa `python3`/`python` como fallback de desenvolvimento.
+
+## Produção e publicação web
+
+O padrão continua sendo backend local em `127.0.0.1:8765`, adequado ao cliente Electron offline. O cliente servido por HTTPS/Nginx usa a API na mesma origem (`/api`), sem banco no navegador; isso requer proxy reverso e uma origem publicada via TLS. Para acesso remoto, use a interface web servida pelo Nginx em navegador HTTPS; não carregue conteúdo remoto no Electron 22, cuja versão foi preservada apenas para execução offline em Windows antigo. Configure `AUTOCAR_ALLOWED_ORIGINS` como lista explícita, sem curingas, e mantenha a API não exposta diretamente à Internet. Para uma primeira base de produção vazia, defina `AUTOCAR_ENV=production`, `AUTOCAR_ADMIN_LOGIN` e `AUTOCAR_ADMIN_PASSWORD` (12 caracteres ou mais) antes do primeiro start; o seed cria apenas o administrador e elimina cadastros de demonstração. Veja [DEPLOY.md](../DEPLOY.md) e os arquivos em `deploy/`.
+
+Cada requisição é serializada sobre a conexão SQLite compartilhada, os tokens expiram após 12 horas e tentativas inválidas de login são limitadas por endereço de origem. Esses controles não substituem HTTPS, backups externos, gestão de segredos nem atualização do sistema operacional.

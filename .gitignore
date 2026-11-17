@@ -3,3 +3,8 @@ release/
 *.log
 __pycache__/
 *.pyc
+backend/bin/
+build/
+dist/
+
+*.spec

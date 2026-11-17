@@ -1,0 +1,27 @@
+[Unit]
+Description=AutoCar oficina backend (SQLite)
+After=network.target
+
+[Service]
+Type=simple
+User=autocar
+Group=autocar
+WorkingDirectory=/opt/autocar
+EnvironmentFile=/etc/autocar/autocar.env
+Environment=AUTOCAR_ENV=production
+Environment=AUTOCAR_HOST=127.0.0.1
+Environment=AUTOCAR_PORT=8765
+Environment=AUTOCAR_DATA_DIR=/var/lib/autocar
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/autocar/backend/server.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/autocar
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

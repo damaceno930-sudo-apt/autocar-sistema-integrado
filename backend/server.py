@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import json
+import math
 import mimetypes
 import os
 import secrets
@@ -28,8 +30,13 @@ PORT = int(os.environ.get("AUTOCAR_PORT", "8765"))
 DATA_HOME = Path(os.environ.get("AUTOCAR_DATA_DIR", Path.home() / ".autocar-sistema"))
 DB_PATH = Path(os.environ.get("AUTOCAR_DB", DATA_HOME / "autocar.db"))
 BACKUP_DIR = DATA_HOME / "backups"
-TOKENS: dict[str, int] = {}
+TOKENS: dict[str, tuple[int, float]] = {}
 LOCK = threading.RLock()
+TOKEN_TTL_SECONDS = 12 * 60 * 60
+ALLOWED_ORIGINS = {value.strip() for value in os.environ.get("AUTOCAR_ALLOWED_ORIGINS", "null,http://127.0.0.1:3000,http://localhost:3000").split(",") if value.strip()}
+LOGIN_FAILURES: dict[str, list[float]] = {}
+LOGIN_LIMIT = 5
+LOGIN_WINDOW_SECONDS = 300
 
 DEFAULT_UNITS = ["un.", "pc", "jogo", "par", "kit", "cx", "m", "cm", "mm", "ml", "l", "g", "kg", "rolo"]
 DEFAULT_COMPANY = {
@@ -146,7 +153,8 @@ class Database:
                 CREATE TABLE IF NOT EXISTS sales (
                     id TEXT PRIMARY KEY, sale_type TEXT, client_id INTEGER, total REAL DEFAULT 0,
                     discount REAL DEFAULT 0, received REAL DEFAULT 0, change_value REAL DEFAULT 0,
-                    seller_id INTEGER, mechanic_id INTEGER, status TEXT NOT NULL DEFAULT 'completed', cancelled_at TEXT, cancel_reason TEXT, created_at TEXT
+                    seller_id INTEGER, mechanic_id INTEGER, status TEXT NOT NULL DEFAULT 'pending', cancelled_at TEXT, cancel_reason TEXT, created_at TEXT,
+                    customer_name TEXT, seller_name TEXT, payment_method TEXT
                 );
                 CREATE TABLE IF NOT EXISTS sale_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id TEXT NOT NULL, item_kind TEXT NOT NULL,
@@ -200,8 +208,33 @@ class Database:
                     reason TEXT, reference_type TEXT, reference_id TEXT, created_by INTEGER NOT NULL, created_at TEXT NOT NULL,
                     FOREIGN KEY(created_by) REFERENCES users(id)
                 );
+                CREATE TABLE IF NOT EXISTS inventory_count_sessions (
+                    session_id TEXT PRIMARY KEY, reason TEXT NOT NULL, actor_id INTEGER, actor_name TEXT NOT NULL,
+                    created_at TEXT NOT NULL, checked INTEGER NOT NULL, adjusted INTEGER NOT NULL,
+                    total_variance REAL NOT NULL, total_value_variance REAL NOT NULL,
+                    positive_variance REAL NOT NULL, negative_variance REAL NOT NULL,
+                    positive_value REAL NOT NULL, negative_value REAL NOT NULL,
+                    FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL
+                );
+                CREATE TABLE IF NOT EXISTS inventory_count_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_code TEXT NOT NULL,
+                    item_name TEXT NOT NULL, unit TEXT, previous_stock REAL NOT NULL, counted REAL NOT NULL,
+                    variance REAL NOT NULL, unit_cost REAL NOT NULL, value_variance REAL NOT NULL,
+                    movement_id TEXT,
+                    FOREIGN KEY(session_id) REFERENCES inventory_count_sessions(session_id) ON DELETE CASCADE
+                );
                 CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
             """)
+            for column, definition in (("customer_name", "TEXT"), ("seller_name", "TEXT"), ("payment_method", "TEXT")):
+                try:
+                    self.conn.execute(f"ALTER TABLE sales ADD COLUMN {column} {definition}")
+                except sqlite3.OperationalError:
+                    pass
+            for column, definition in (("unit", "TEXT"),):
+                try:
+                    self.conn.execute(f"ALTER TABLE sale_items ADD COLUMN {column} {definition}")
+                except sqlite3.OperationalError:
+                    pass
             for column, definition in (("installment_number", "INTEGER DEFAULT 1"), ("total_installments", "INTEGER DEFAULT 1")):
                 try:
                     self.conn.execute(f"ALTER TABLE accounts_receivable ADD COLUMN {column} {definition}")
@@ -235,20 +268,31 @@ class Database:
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(6, ?)", (now_iso(),))
             if not self.conn.execute("SELECT 1 FROM migrations WHERE version=7").fetchone():
                 self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(7, ?)", (now_iso(),))
+            if not self.conn.execute("SELECT 1 FROM migrations WHERE version=8").fetchone():
+                self.conn.execute("INSERT INTO migrations(version, applied_at) VALUES(8, ?)", (now_iso(),))
 
     def seed(self):
         stamp = now_iso()
-        users = [
-            (1, "Rafael Costa", "admin@autocar.local", "admin123", "Administrador", 1, 0, ["all"]),
-            (2, "João Mendes", "joao.mendes", "oficina123", "Técnico", 0, 1, ["dashboard", "orders", "customers", "diagnostics"]),
-            (3, "Camila Prado", "camila.prado", "oficina123", "Recepção", 0, 0, ["dashboard", "orders", "customers", "sales", "schedule"]),
-        ]
+        production = os.environ.get("AUTOCAR_ENV", "development").lower() == "production"
+        admin_login = os.environ.get("AUTOCAR_ADMIN_LOGIN", "admin@autocar.local").strip()
+        admin_password = os.environ.get("AUTOCAR_ADMIN_PASSWORD", "admin123")
+        if production and (len(admin_password) < 12 or admin_password.startswith("REPLACE_WITH_") or admin_password == "admin123"):
+            raise RuntimeError("Em produção, defina AUTOCAR_ADMIN_PASSWORD com pelo menos 12 caracteres, exclusivo e diferente do valor-modelo.")
+        users = [(1, "Administrador", admin_login, admin_password, "Administrador", 1, 0, ["all"])]
+        if not production:
+            users.extend([
+                (2, "João Mendes", "joao.mendes", "oficina123", "Técnico", 0, 1, ["dashboard", "orders", "customers", "diagnostics"]),
+                (3, "Camila Prado", "camila.prado", "oficina123", "Recepção", 0, 0, ["dashboard", "orders", "customers", "sales", "schedule"]),
+            ])
         for user_id, name, login, password, role, admin, mechanic, permissions in users:
             salt, digest = password_hash(password)
             self.conn.execute("INSERT INTO users(id,name,login,password_salt,password_hash,role,admin,is_mechanic,permissions_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (user_id, name, login, salt, digest, role, admin, mechanic, json_text(permissions), stamp, stamp))
-        for key, value in DEFAULT_STATE.items():
+        initial_state = dict(DEFAULT_STATE)
+        if production:
+            initial_state = {**DEFAULT_STATE, "company": {field: "" for field in DEFAULT_COMPANY}, "clients": [], "orders": [], "inventory": [], "services": [], "suppliers": [], "sales": [], "financeEntries": []}
+        for key, value in initial_state.items():
             self.conn.execute("INSERT OR REPLACE INTO app_state(key,value,updated_at) VALUES(?,?,?)", (key, json_text(value), stamp))
-        self.sync_relational(DEFAULT_STATE, stamp)
+        self.sync_relational(initial_state, stamp)
 
     def user(self, row) -> dict:
         return {"id": row["id"], "name": row["name"], "login": row["login"], "role": row["role"], "admin": bool(row["admin"]), "isMechanic": bool(row["is_mechanic"]), "permissions": json.loads(row["permissions_json"] or "[]")}
@@ -386,23 +430,79 @@ class Database:
         return self.row_dict(self.conn.execute("SELECT * FROM stock_movements WHERE id=?", (movement_id,)).fetchone())
 
     def stock_physical_count(self, data, actor):
-        counts = data.get("items") or []; reason = str(data.get("reason") or "Inventário físico").strip(); session_id = f"inv-{secrets.token_hex(8)}"
-        if not counts: raise ValueError("informe pelo menos um item para a conferência")
-        stamp = now_iso(); adjusted = []; total_variance = 0
+        counts = data.get("items") or []
+        reason = str(data.get("reason") or "Inventário físico").strip()[:300]
+        session_id = f"inv-{secrets.token_hex(8)}"
+        if not counts:
+            raise ValueError("informe pelo menos um item para a conferência")
+        stamp = now_iso()
+        checked_items = []
+        total_variance = total_value_variance = positive_variance = negative_variance = positive_value = negative_value = 0.0
+        seen = set()
         with self.conn:
+            self.conn.execute("INSERT INTO inventory_count_sessions(session_id,reason,actor_id,actor_name,created_at,checked,adjusted,total_variance,total_value_variance,positive_variance,negative_variance,positive_value,negative_value) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (session_id, reason, actor["id"], actor["name"], stamp, 0, 0, 0, 0, 0, 0, 0, 0))
             for entry in counts:
-                code = str(entry.get("code", "")).strip().upper(); counted = float(entry.get("count", -1))
-                if not code or counted < 0: raise ValueError("contagem física inválida")
+                code = str(entry.get("code", "")).strip().upper()
+                try:
+                    counted = float(entry.get("count", -1))
+                except (TypeError, ValueError):
+                    raise ValueError("contagem física inválida")
+                if not code or not math.isfinite(counted) or counted < 0:
+                    raise ValueError("contagem física inválida")
+                if code in seen:
+                    raise ValueError(f"item duplicado na contagem: {code}")
+                seen.add(code)
                 item = self.conn.execute("SELECT * FROM stock_items WHERE code=?", (code,)).fetchone()
-                if not item: raise ValueError(f"item não encontrado: {code}")
-                previous = float(item["stock"] or 0); variance = round(counted - previous, 4)
-                if abs(variance) < 0.0001: continue
-                self.conn.execute("UPDATE stock_items SET stock=? WHERE code=?", (counted, code))
-                movement_id = self.record_stock_movement(code, "adjustment", variance, previous, counted, item["cost"], reason, "physical_count", session_id, actor["id"], stamp)
-                adjusted.append({"movementId": movement_id, "code": code, "name": item["name"], "previous": previous, "counted": counted, "variance": variance})
+                if not item:
+                    raise ValueError(f"item não encontrado: {code}")
+                previous = float(item["stock"] or 0)
+                cost = float(item["cost"] or 0)
+                variance = round(counted - previous, 4)
+                value_variance = round(variance * cost, 2)
+                movement_id = None
+                if abs(variance) >= 0.0001:
+                    self.conn.execute("UPDATE stock_items SET stock=? WHERE code=?", (counted, code))
+                    movement_id = self.record_stock_movement(code, "adjustment", variance, previous, counted, cost, reason, "physical_count", session_id, actor["id"], stamp)
+                self.conn.execute("INSERT INTO inventory_count_items(session_id,item_code,item_name,unit,previous_stock,counted,variance,unit_cost,value_variance,movement_id) VALUES(?,?,?,?,?,?,?,?,?,?)", (session_id, code, item["name"], item["unit"], previous, counted, variance, cost, value_variance, movement_id))
+                checked_items.append({"movementId": movement_id, "code": code, "name": item["name"], "unit": item["unit"], "previous": previous, "counted": counted, "variance": variance, "unitCost": cost, "valueVariance": value_variance})
                 total_variance += variance
-            self.audit(actor["id"], "physical_count", "stock", f"{session_id} • {len(adjusted)} ajustes")
-        return {"sessionId": session_id, "checked": len(counts), "adjusted": len(adjusted), "totalVariance": round(total_variance, 4), "items": adjusted}
+                total_value_variance += value_variance
+                if variance > 0:
+                    positive_variance += variance
+                    positive_value += value_variance
+                elif variance < 0:
+                    negative_variance += abs(variance)
+                    negative_value += abs(value_variance)
+            adjusted = sum(1 for item in checked_items if abs(item["variance"]) >= 0.0001)
+            self.conn.execute("UPDATE inventory_count_sessions SET checked=?,adjusted=?,total_variance=?,total_value_variance=?,positive_variance=?,negative_variance=?,positive_value=?,negative_value=? WHERE session_id=?", (len(checked_items), adjusted, round(total_variance, 4), round(total_value_variance, 2), round(positive_variance, 4), round(negative_variance, 4), round(positive_value, 2), round(negative_value, 2), session_id))
+            self.audit(actor["id"], "physical_count", "stock", f"{session_id} • {adjusted} ajustes")
+        return self.stock_physical_count_details(session_id)
+
+    def stock_physical_count_details(self, session_id):
+        row = self.conn.execute("SELECT * FROM inventory_count_sessions WHERE session_id=?", (session_id,)).fetchone()
+        if not row:
+            raise ValueError("sessão de inventário não encontrada")
+        result = self.row_dict(row)
+        result["items"] = [self.row_dict(item) for item in self.conn.execute("SELECT * FROM inventory_count_items WHERE session_id=? ORDER BY id", (session_id,))]
+        result["sessionId"] = result.pop("session_id")
+        result["createdAt"] = result.pop("created_at")
+        result["actorName"] = result.pop("actor_name")
+        result["checked"] = result.pop("checked")
+        result["adjusted"] = result.pop("adjusted")
+        result["totalVariance"] = result.pop("total_variance")
+        result["totalValueVariance"] = result.pop("total_value_variance")
+        result["positiveVariance"] = result.pop("positive_variance")
+        result["negativeVariance"] = result.pop("negative_variance")
+        result["positiveValue"] = result.pop("positive_value")
+        result["negativeValue"] = result.pop("negative_value")
+        for item in result["items"]:
+            item["movementId"] = item.pop("movement_id")
+            item["code"] = item.pop("item_code")
+            item["name"] = item.pop("item_name")
+            item["previous"] = item.pop("previous_stock")
+            item["unitCost"] = item.pop("unit_cost")
+            item["valueVariance"] = item.pop("value_variance")
+        return result
 
     def finance_create_category(self, data, actor):
         name = str(data.get("name", "")).strip()
@@ -480,15 +580,25 @@ class Database:
         return {"purchase": self.row_dict(self.conn.execute("SELECT * FROM stock_purchases WHERE id=?", (purchase_id,)).fetchone()), "payable": self.row_dict(self.conn.execute("SELECT * FROM accounts_payable WHERE id=?", (payable_id,)).fetchone())}
 
     def finance_record_sale(self, data, actor):
-        total = float(data.get("total", 0) or 0)
-        received = float(data.get("received", 0) or 0)
-        if total <= 0: raise ValueError("total da venda inválido")
+        total = round(float(data.get("total", 0) or 0), 2)
+        received = round(float(data.get("received", 0) or 0), 2)
+        sale_items = data.get("items") or []
+        if total <= 0 or not math.isfinite(total): raise ValueError("total da venda inválido")
+        if received < 0 or not math.isfinite(received): raise ValueError("valor recebido inválido")
+        if not sale_items: raise ValueError("a venda precisa conter pelo menos um item")
         sale_id = data.get("id") or f"sale-{secrets.token_hex(8)}"
         stamp = now_iso()
         commission_rate = float(data.get("commissionRate", 3) or 0)
         commission_amount = round(total * commission_rate / 100, 2)
+        seller_id = data.get("sellerId", actor["id"])
+        seller_row = self.conn.execute("SELECT name FROM users WHERE id=?", (seller_id,)).fetchone()
+        seller_name = seller_row["name"] if seller_row else actor["name"]
+        customer_name = str(data.get("customer", "")).strip()
+        payment_method = str(data.get("paymentMethod") or "Não informado").strip()[:80]
+        discount_total = round(sum(max(0.0, float(item.get("discount", 0) or 0)) * float(item.get("quantity", 0) or 0) for item in sale_items), 2)
+        payment_status = "paid" if received >= total else ("partial" if received > 0 else "pending")
         with self.conn:
-            self.conn.execute("INSERT INTO sales(id,sale_type,client_id,total,discount,received,change_value,seller_id,mechanic_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)", (sale_id, data.get("saleType", "direct"), data.get("clientId"), total, data.get("discount", 0), received, max(0, received - total), data.get("sellerId", actor["id"]), data.get("mechanicId"), stamp))
+            self.conn.execute("INSERT INTO sales(id,sale_type,client_id,total,discount,received,change_value,seller_id,mechanic_id,status,created_at,customer_name,seller_name,payment_method) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (sale_id, data.get("saleType", "direct"), data.get("clientId"), total, discount_total, received, max(0, received - total), seller_id, data.get("mechanicId"), payment_status, stamp, customer_name, seller_name, payment_method))
             for item in data.get("items", []):
                 quantity = float(item.get("quantity", 0) or 0)
                 unit_price = float(item.get("price", 0) or 0)
@@ -505,7 +615,9 @@ class Database:
                     previous_stock = float(stock["stock"])
                     self.conn.execute("UPDATE stock_items SET stock=stock-? WHERE code=?", (quantity, code))
                     self.record_stock_movement(code, "exit", -quantity, previous_stock, previous_stock - quantity, unit_cost, "Saída por venda", "sale", sale_id, actor["id"], stamp)
-                self.conn.execute("INSERT INTO sale_items(sale_id,item_kind,item_code,description,quantity,unit_price,unit_cost,total) VALUES(?,?,?,?,?,?,?,?)", (sale_id, item_kind, code, item.get("name", "Item da venda"), quantity, unit_price, unit_cost, item_total))
+                if quantity <= 0 or unit_price < 0 or discount < 0 or discount > unit_price:
+                    raise ValueError("item da venda possui quantidade, preço ou desconto inválido")
+                self.conn.execute("INSERT INTO sale_items(sale_id,item_kind,item_code,description,quantity,unit_price,unit_cost,total,unit) VALUES(?,?,?,?,?,?,?,?,?)", (sale_id, item_kind, code, item.get("name", "Item da venda"), quantity, unit_price, unit_cost, item_total, item.get("unit")))
             status = "paid" if received >= total else "pending"
             self.conn.execute("INSERT INTO finance_transactions(id,kind,category,description,amount,status,paid_date,sale_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)", (f"fin-{sale_id}", "income", "Venda", data.get("description", "Venda de produtos e serviços"), total, status, stamp if status == "paid" else None, sale_id, stamp))
             if received < total:
@@ -520,6 +632,18 @@ class Database:
                 self.conn.execute("INSERT INTO commissions(id,sale_id,seller_id,base_amount,rate,amount,status,created_at) VALUES(?,?,?,?,?,?,?,?)", (f"com-{sale_id}", sale_id, data["sellerId"], total, commission_rate, commission_amount, "pending", stamp))
             self.audit(actor["id"], "create", "sale", sale_id)
         return self.row_dict(self.conn.execute("SELECT * FROM sales WHERE id=?", (sale_id,)).fetchone())
+
+    def finance_sale_receipt(self, sale_id):
+        sale = self.conn.execute("SELECT * FROM sales WHERE id=?", (sale_id,)).fetchone()
+        if not sale:
+            raise ValueError("venda não encontrada")
+        sale_data = self.row_dict(sale)
+        items = [self.row_dict(row) for row in self.conn.execute("SELECT * FROM sale_items WHERE sale_id=? ORDER BY id", (sale_id,))]
+        installments = [self.row_dict(row) for row in self.conn.execute("SELECT * FROM accounts_receivable WHERE sale_id=? ORDER BY installment_number", (sale_id,))]
+        subtotal = round(sum(float(item["unit_price"]) * float(item["quantity"]) for item in items), 2)
+        discount = round(sum(max(0.0, float(item["unit_price"]) - float(item["total"]) / max(float(item["quantity"]), 0.000001)) * float(item["quantity"]) for item in items), 2)
+        customer = self.conn.execute("SELECT name,cpf,email,phone,address FROM clients WHERE id=?", (sale["client_id"],)).fetchone() if sale["client_id"] else None
+        return {"sale": sale_data, "items": items, "installments": installments, "customer": self.row_dict(customer), "subtotal": subtotal, "discount": discount, "total": float(sale["total"] or 0), "received": float(sale["received"] or 0), "change": float(sale["change_value"] or 0), "balance": round(max(0.0, float(sale["total"] or 0) - float(sale["received"] or 0) - sum(float(item["paid_amount"] or 0) for item in installments)), 2)}
 
     def finance_open_cash(self, data, actor):
         if self.conn.execute("SELECT 1 FROM cash_registers WHERE status='open'").fetchone(): raise ValueError("já existe um caixa aberto")
@@ -614,8 +738,6 @@ class Database:
             DELETE FROM service_catalog;
             DELETE FROM service_orders;
             DELETE FROM suppliers;
-            DELETE FROM sales;
-            DELETE FROM finance_transactions;
         """)
         for client in snapshot.get("clients", []):
             client_id = client.get("id")
@@ -728,6 +850,13 @@ def body_bytes(handler: BaseHTTPRequestHandler) -> bytes:
     return handler.rfile.read(length)
 
 
+def serialized_request(method):
+    def wrapped(self, *args, **kwargs):
+        with LOCK:
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "AutoCarBackend/1.0"
@@ -741,7 +870,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin", "*"))
+        origin = self.headers.get("Origin")
+        if origin and origin in ALLOWED_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-AutoCar-Token")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         if filename:
@@ -753,12 +885,32 @@ class Handler(BaseHTTPRequestHandler):
         self.send_payload(status, json_text(data).encode("utf-8"))
 
     def do_OPTIONS(self):
+        origin = self.headers.get("Origin")
+        if origin and origin not in ALLOWED_ORIGINS:
+            self.send_json(403, {"error": "origin_not_allowed"})
+            return
         self.send_payload(204, b"")
+
+    def client_ip(self):
+        peer = self.client_address[0]
+        try:
+            peer_address = ipaddress.ip_address(peer)
+            if peer_address.is_loopback:
+                forwarded = self.headers.get("X-Forwarded-For", "").split(",")[-1].strip()
+                if forwarded:
+                    return str(ipaddress.ip_address(forwarded))
+        except ValueError:
+            pass
+        return peer
 
     def current_user(self):
         token = self.headers.get("X-AutoCar-Token", "")
-        user_id = TOKENS.get(token)
-        if not user_id:
+        entry = TOKENS.get(token)
+        if not entry:
+            return None
+        user_id, expires_at = entry
+        if time.time() >= expires_at:
+            TOKENS.pop(token, None)
             return None
         row = DB.conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         return DB.user(row) if row else None
@@ -790,10 +942,29 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return user
 
+    @serialized_request
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
-            self.send_json(200, {"ok": True, "app": APP_NAME, "database": str(DB_PATH), "schema": 7})
+            self.send_json(200, {"ok": True, "app": APP_NAME, "schema": 8})
+            return
+        if parsed.path.startswith("/api/inventory/physical-count/"):
+            user = self.require_inventory()
+            if user:
+                try:
+                    session_id = parsed.path.rsplit("/", 1)[-1]
+                    self.send_json(200, {"session": DB.stock_physical_count_details(session_id)})
+                except Exception as exc:
+                    self.send_json(404, {"error": "not_found", "message": str(exc)})
+            return
+        if parsed.path.startswith("/api/finance/sales/") and not parsed.path.endswith("/cancel"):
+            user = self.require_finance_or_sales()
+            if user:
+                try:
+                    sale_id = parsed.path.rstrip("/").split("/")[-1]
+                    self.send_json(200, {"receipt": DB.finance_sale_receipt(sale_id)})
+                except Exception as exc:
+                    self.send_json(404, {"error": "not_found", "message": str(exc)})
             return
         if parsed.path == "/api/state":
             user = self.require_user()
@@ -865,6 +1036,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(404, {"error": "not_found"})
 
+    @serialized_request
     def do_POST(self):
         parsed = urlparse(self.path)
         try:
@@ -872,13 +1044,22 @@ class Handler(BaseHTTPRequestHandler):
             is_sqlite = self.headers.get("Content-Type", "").startswith("application/vnd.sqlite3") or payload.startswith(b"SQLite format 3")
             data = {} if is_sqlite else (json.loads(payload.decode("utf-8")) if payload else {})
             if parsed.path == "/api/auth/login":
+                ip = self.client_ip()
+                attempts = [stamp for stamp in LOGIN_FAILURES.get(ip, []) if time.time() - stamp < LOGIN_WINDOW_SECONDS]
+                if len(attempts) >= LOGIN_LIMIT:
+                    LOGIN_FAILURES[ip] = attempts
+                    self.send_json(429, {"error": "rate_limited", "message": "Muitas tentativas. Aguarde alguns minutos e tente novamente."})
+                    return
                 user = DB.authenticate(str(data.get("login", "")), str(data.get("password", "")))
                 if not user:
+                    attempts.append(time.time())
+                    LOGIN_FAILURES[ip] = attempts
                     self.send_json(401, {"error": "invalid_credentials", "message": "Login ou senha inválidos."})
                     return
                 token = secrets.token_urlsafe(32)
-                TOKENS[token] = user["id"]
-                self.send_json(200, {"token": token, "user": user, "state": DB.snapshot(user)})
+                TOKENS[token] = (user["id"], time.time() + TOKEN_TTL_SECONDS)
+                LOGIN_FAILURES.pop(self.client_ip(), None)
+                self.send_json(200, {"token": token, "expiresIn": TOKEN_TTL_SECONDS, "user": user, "state": DB.snapshot(user)})
                 return
             if parsed.path == "/api/auth/logout":
                 token = self.headers.get("X-AutoCar-Token", "")
@@ -899,7 +1080,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/finance/sales":
                 user = self.require_finance_or_sales()
-                if user: self.send_json(201, {"item": DB.finance_record_sale(data, user), "summary": DB.finance_summary()})
+                if user:
+                    sale = DB.finance_record_sale(data, user)
+                    self.send_json(201, {"item": sale, "receipt": DB.finance_sale_receipt(sale["id"]), "summary": DB.finance_summary()})
                 return
             if parsed.path == "/api/finance/categories":
                 user = self.require_finance()
@@ -954,6 +1137,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.send_json(400, {"error": "bad_request", "message": str(exc)})
 
+    @serialized_request
     def do_PUT(self):
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/finance/receivables/") or parsed.path.startswith("/api/finance/payables/"):
@@ -981,6 +1165,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(400, {"error": "bad_request", "message": str(exc)})
 
 
+    @serialized_request
     def do_DELETE(self):
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/finance/transactions/"):

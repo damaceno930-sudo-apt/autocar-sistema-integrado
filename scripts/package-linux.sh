@@ -12,9 +12,16 @@ command -v dpkg-deb >/dev/null 2>&1 || { echo "Erro: dpkg-deb não encontrado pa
 VERSION="$(node -p "require('./package.json').version")"
 PRODUCT_NAME="AutoCar Sistema Integrado"
 ARCH="$(dpkg --print-architecture)"
-npx electron-packager . "$PRODUCT_NAME" --platform=linux --arch="$ARCH" --out=release --overwrite --asar.unpackDir=backend --electron-version=22.3.27 --app-version="$VERSION" --prune=true --ignore='^/(release|node_modules|scripts)(/|$)'
+case "$ARCH" in
+  amd64) ELECTRON_ARCH="x64" ;;
+  arm64) ELECTRON_ARCH="arm64" ;;
+  i386) ELECTRON_ARCH="ia32" ;;
+  armhf) ELECTRON_ARCH="armv7l" ;;
+  *) echo "Arquitetura Debian não suportada: $ARCH" >&2; exit 1 ;;
+esac
+npx electron-packager . "$PRODUCT_NAME" --platform=linux --arch="$ELECTRON_ARCH" --out=release --overwrite --asar.unpackDir=backend --electron-version=22.3.27 --app-version="$VERSION" --prune=true --ignore='^/(release|node_modules|scripts)(/|$)'
 
-APP_DIR="$(find "$ROOT_DIR/release" -maxdepth 1 -type d -name 'AutoCar Sistema Integrado-linux-*' | head -n 1)"
+APP_DIR="$ROOT_DIR/release/AutoCar Sistema Integrado-linux-$ELECTRON_ARCH"
 if [[ -z "$APP_DIR" || ! -d "$APP_DIR" ]]; then
   echo "Erro: diretório Linux empacotado não foi encontrado." >&2
   exit 1

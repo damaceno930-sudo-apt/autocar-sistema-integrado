@@ -1,0 +1,84 @@
+name: AutoCar checks and desktop builds
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm ci
+      - run: npm run check
+
+  windows:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x64
+            python-architecture: x64
+          - target: x86
+            python-architecture: x86
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8.10'
+          architecture: ${{ matrix.python-architecture }}
+      - run: npm ci
+      - run: python -m pip install --upgrade pip pyinstaller
+      - shell: pwsh
+        run: |
+          $env:AUTOCAR_BUILD_PYTHON = (Get-Command python).Source
+          ./scripts/build-backend.ps1 -TargetArch ${{ matrix.target }}
+      - shell: pwsh
+        run: ./scripts/smoke-backend.ps1 -TargetArch ${{ matrix.target }}
+      - if: matrix.target == 'x64'
+        run: npm run package:windows
+      - if: matrix.target == 'x86'
+        run: npm run package:windows:x86
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoCar-Windows-${{ matrix.target }}
+          path: release/*.exe
+          if-no-files-found: error
+
+  ubuntu:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm ci
+      - run: python -m pip install --user --upgrade pip pyinstaller
+      - run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: npm run build:backend
+      - run: npm run package:linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoCar-Ubuntu-24-x64
+          path: |
+            release/*.deb
+            release/*.AppImage
+          if-no-files-found: error

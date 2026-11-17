@@ -12,15 +12,20 @@
     "start:backend": "python3 backend/server.py",
     "check:backend": "python3 -m py_compile backend/server.py",
     "build:backend": "bash scripts/build-backend.sh",
-    "package:linux": "bash scripts/package-linux.sh",
+    "package:linux": "bash scripts/package-linux.sh && npm run package:linux:appimage",
     "package:windows": "electron-builder --win nsis portable --x64 --publish never",
     "package:windows:portable": "bash scripts/package-windows-portable.sh",
-    "package:all": "npm run package:linux && npm run package:windows"
+    "package:all": "npm run package:linux && npm run package:windows",
+    "test": "python3 -m unittest discover -s tests -v",
+    "check": "npm run check:backend && node --check app.js && node --check desktop/main.cjs && npm test",
+    "build:backend:windows:x86": "powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1 -TargetArch x86",
+    "package:windows:x86": "electron-builder --win nsis portable --ia32 --publish never",
+    "package:linux:appimage": "electron-builder --config electron-builder.linux.json --linux AppImage --x64 --publish never"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "electron": "22.3.27",
-    "electron-builder": "24.13.3"
+    "electron-builder": "^26.18.0"
   },
   "build": {
     "appId": "br.autocar.sistemaintegrado",

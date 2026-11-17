@@ -1,0 +1,32 @@
+{
+  "appId": "br.autocar.sistemaintegrado",
+  "productName": "AutoCar Sistema Integrado",
+  "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+  "asar": true,
+  "asarUnpack": [
+    "backend/**/*"
+  ],
+  "compression": "normal",
+  "files": [
+    "index.html",
+    "styles.css",
+    "app.js",
+    "manus-routes.json",
+    "public/**/*",
+    "desktop/**/*",
+    "backend/**/*",
+    "referencia-funcoes.md"
+  ],
+  "directories": {
+    "output": "release"
+  },
+  "linux": {
+    "target": [
+      "AppImage"
+    ],
+    "category": "Office",
+    "synopsis": "Gestão offline para oficina mecânica",
+    "description": "Sistema integrado offline para clientes, veículos, ordens de serviço, estoque, vendas e financeiro.",
+    "maintainer": "AutoCar"
+  }
+}
