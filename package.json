@@ -54,7 +54,7 @@
         "nsis",
         "portable"
       ],
-      "sign": false,
+      "signExecutable": false,
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
