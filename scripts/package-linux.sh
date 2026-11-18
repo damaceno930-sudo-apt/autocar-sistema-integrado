@@ -33,9 +33,11 @@ trap 'rm -rf "$STAGE_DIR"' EXIT
 
 mkdir -p "$STAGE_DIR/DEBIAN"
 mkdir -p "$STAGE_DIR/opt/$PRODUCT_NAME"
+mkdir -p "$STAGE_DIR/usr/bin"
 mkdir -p "$STAGE_DIR/usr/share/applications"
 mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps"
 cp -a "$APP_DIR"/. "$STAGE_DIR/opt/$PRODUCT_NAME/"
+ln -s "../../opt/$PRODUCT_NAME/$PRODUCT_NAME" "$STAGE_DIR/usr/bin/autocar-sistema-integrado"
 
 cat > "$STAGE_DIR/DEBIAN/control" <<EOF
 Package: $PACKAGE_NAME
@@ -54,7 +56,9 @@ cat > "$STAGE_DIR/usr/share/applications/$PACKAGE_NAME.desktop" <<EOF
 [Desktop Entry]
 Name=AutoCar Sistema Integrado
 Comment=Gestão offline para oficina mecânica
-Exec=/opt/$PRODUCT_NAME/autocar-sistema-integrado %U
+Exec=/usr/bin/autocar-sistema-integrado %U
+TryExec=/usr/bin/autocar-sistema-integrado
+Icon=$PACKAGE_NAME
 Terminal=false
 Type=Application
 Categories=Office;
@@ -62,6 +66,17 @@ EOF
 
 ICON="$ROOT_DIR/node_modules/app-builder-lib/templates/icons/electron-linux/256x256.png"
 if [[ -f "$ICON" ]]; then cp "$ICON" "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps/$PACKAGE_NAME.png"; fi
+
+LAUNCHER="$STAGE_DIR/usr/bin/autocar-sistema-integrado"
+RESOLVED_LAUNCHER="$(readlink -f "$LAUNCHER")"
+if [[ "$RESOLVED_LAUNCHER" != "$STAGE_DIR/opt/$PRODUCT_NAME/$PRODUCT_NAME" || ! -x "$RESOLVED_LAUNCHER" ]]; then
+  echo "Erro: o launcher Linux não aponta para o executável empacotado." >&2
+  exit 1
+fi
+if ! grep -Fxq 'Exec=/usr/bin/autocar-sistema-integrado %U' "$STAGE_DIR/usr/share/applications/$PACKAGE_NAME.desktop"; then
+  echo "Erro: entrada do menu Linux não possui Exec válido." >&2
+  exit 1
+fi
 
 OUTPUT="$ROOT_DIR/release/${PACKAGE_NAME}-${VERSION}-${ARCH}.deb"
 rm -f "$OUTPUT"
